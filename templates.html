@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>Åbn skabelon</title>
+
+    <script src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+    <script src="scripts/settings.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/api.js"></script>
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        /* The plugin window has a fixed size, so the list itself must scroll. */
+        body {
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0 20px 20px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+        }
+
+        .warning {
+            flex: none;
+            margin-bottom: 12px;
+            padding: 8px 10px;
+            border-left: 3px solid #c77700;
+            background: #fff6e5;
+            color: #5c3a00;
+        }
+
+        #search {
+            flex: none;
+            box-sizing: border-box;
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            font: inherit;
+        }
+
+        #templates {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        .template {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .name {
+            font-weight: bold;
+        }
+
+        .meta {
+            margin-top: 3px;
+            color: #666;
+        }
+
+        .edit {
+            flex: none;
+            padding: 5px 12px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .locked {
+            flex: none;
+            color: #999;
+        }
+
+        .empty {
+            padding: 10px 0;
+            color: #999;
+        }
+
+        .login {
+            margin: 12px 0;
+            padding: 6px 14px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        #status {
+            flex: none;
+            margin-bottom: 0;
+            margin-top: 12px;
+            padding: 10px;
+            background: #f5f5f5;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>Åbn skabelon</h3>
+
+    <div class="warning">
+        <strong>Du redigerer selve skabelonen, ikke en kopi.</strong>
+        Når du gemmer, ændres skabelonen for alle, der bruger den i OpenCase.
+        Ændringerne gemmes først i skabelonen, når alle har lukket den (ca. 10 sekunder efter),
+        så luk skabelonen, når du er færdig.
+    </div>
+
+    <input id="search" type="search" placeholder="Søg i skabeloner" aria-label="Søg i skabeloner">
+
+    <div id="templates"></div>
+
+    <pre id="status">Initialiserer...</pre>
+
+    <script>
+        const container = document.getElementById("templates");
+        const status = document.getElementById("status");
+        const searchInput = document.getElementById("search");
+
+        const NotLoggedInError = window.OpenCaseApi.NotLoggedInError;
+
+        // Ignores responses from a search that was replaced while loading.
+        let loadId = 0;
+        let searchTimer = null;
+
+        function showStatus(message) {
+            status.textContent = message;
+        }
+
+        async function loadTemplates() {
+            const id = ++loadId;
+            showStatus("Henter skabeloner...");
+
+            try {
+                const data = await window.OpenCaseApi.get("/templates", { search: searchInput.value.trim() });
+                if (id !== loadId) return;
+                const templates = Array.isArray(data) ? data : (data.templates || data.data);
+                if (!Array.isArray(templates)) {
+                    throw new Error("Uventet svar fra serveren");
+                }
+
+                container.replaceChildren();
+                if (!templates.length) {
+                    const empty = document.createElement("div");
+                    empty.className = "empty";
+                    empty.textContent = searchInput.value.trim() ? "Ingen skabeloner matcher søgningen" : "Ingen skabeloner";
+                    container.appendChild(empty);
+                }
+                templates.forEach(renderTemplate);
+                showStatus(templates.length + " skabeloner hentet");
+            } catch (error) {
+                if (id !== loadId) return;
+                container.replaceChildren();
+                if (error instanceof NotLoggedInError) {
+                    showLogin(error.message);
+                } else {
+                    showStatus("FEJL: " + error.message);
+                }
+            }
+        }
+
+        function formatDate(value) {
+            const date = new Date(value);
+            return isNaN(date) ? "" : date.toLocaleDateString("da-DK");
+        }
+
+        function formatSize(bytes) {
+            if (typeof bytes !== "number") return "";
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+            return (bytes / 1024 / 1024).toFixed(1).replace(".", ",") + " MB";
+        }
+
+        function renderTemplate(template) {
+            const element = document.createElement("div");
+            element.className = "template";
+
+            const info = document.createElement("div");
+            info.className = "info";
+
+            const name = document.createElement("div");
+            name.className = "name";
+            name.textContent = template.name;
+
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            meta.textContent = [
+                template.uploadedBy && template.uploadedBy.displayName,
+                formatDate(template.createdAt),
+                formatSize(template.size)
+            ].filter(Boolean).join(" · ");
+
+            info.appendChild(name);
+            info.appendChild(meta);
+            element.appendChild(info);
+
+            if (template.canEdit && template.editorUrl) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "edit";
+                button.textContent = "Rediger";
+                button.title = "Åbner selve skabelonen. Ændringer du gemmer, gælder for alle.";
+                button.addEventListener("click", function () {
+                    openTemplate(template);
+                });
+                element.appendChild(button);
+            } else {
+                const locked = document.createElement("span");
+                locked.className = "locked";
+                locked.textContent = "Kan ikke redigeres";
+                locked.title = "Kun administratorer og skabelondesignere kan redigere skabeloner";
+                element.appendChild(locked);
+            }
+
+            container.appendChild(element);
+        }
+
+        function openTemplate(template) {
+            showStatus("Åbner skabelonen " + template.name + "...");
+            // The main plugin picks the editor from the file name's extension;
+            // the stored file name in editorUrl is internal, so pass the original.
+            Asc.plugin.sendToPlugin("onOpenDocument", {
+                fileId: template.fileId,
+                name: template.originalFilename || template.name,
+                editorUrl: template.editorUrl
+            });
+        }
+
+        function showLogin(message) {
+            showStatus(message + " (" + window.OpenCaseSettings.getUrl() + ")");
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "login";
+            button.textContent = "Log ind";
+            button.addEventListener("click", function () {
+                button.disabled = true;
+                showStatus("Log ind i browseren, og giv adgang. Venter...");
+                Asc.plugin.sendToPlugin("onLogin", null);
+            });
+            container.replaceChildren(button);
+        }
+
+        searchInput.addEventListener("input", function () {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(loadTemplates, 300);
+        });
+
+        window.Asc.plugin.attachEvent("onLoggedIn", function () {
+            loadTemplates();
+        });
+
+        window.Asc.plugin.attachEvent("onLoginFailed", function (data) {
+            showLogin("Login fejlede: " + (data && data.error));
+        });
+
+        window.Asc.plugin.attachEvent("onDesktopApiTest", function (data) {
+            if (data && data.commandExecuted) {
+                showStatus("Skabelonen er åbnet. Husk: gemte ændringer gælder for alle.");
+            } else {
+                showStatus("FEJL: " + ((data && data.error) || "Skabelonen kunne ikke åbnes"));
+            }
+        });
+
+        window.Asc.plugin.init = function () {
+            searchInput.focus();
+            loadTemplates();
+        };
+    </script>
+</body>
+</html>

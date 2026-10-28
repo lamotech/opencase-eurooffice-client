@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>Ny fil fra skabelon</title>
+
+    <script src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+    <script src="scripts/settings.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/api.js"></script>
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 12px 20px 16px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #222;
+        }
+
+        #form {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        fieldset {
+            margin: 0 0 16px;
+            padding: 0;
+            border: 0;
+        }
+
+        legend,
+        label.heading {
+            display: block;
+            margin-bottom: 6px;
+            padding: 0;
+            font-weight: bold;
+        }
+
+        .required::after {
+            content: " *";
+            color: #c0392b;
+        }
+
+        .field {
+            margin-bottom: 10px;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .row .field {
+            flex: 1;
+            min-width: 0;
+        }
+
+        input[type="text"],
+        input[type="search"],
+        select {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 5px 7px;
+            border: 1px solid #bbb;
+            border-radius: 3px;
+            font: inherit;
+            background: #fff;
+        }
+
+        input:focus,
+        select:focus {
+            outline: 2px solid #9cc3e8;
+            outline-offset: -1px;
+        }
+
+        .choice {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 0;
+            cursor: pointer;
+        }
+
+        /* display: flex above would otherwise override the hidden attribute. */
+        .choice[hidden] {
+            display: none;
+        }
+
+        .choice input:disabled + span {
+            color: #aaa;
+        }
+
+        .sub-form {
+            margin: 4px 0 8px 22px;
+        }
+
+        .sub-form[hidden] {
+            display: none;
+        }
+
+        .hint {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .hint:empty {
+            display: none;
+        }
+
+        /* Pick lists: documents, cases and templates */
+        .pick-list {
+            max-height: 170px;
+            overflow-y: auto;
+            margin: 6px 0 0;
+            padding: 0;
+            list-style: none;
+            border: 1px solid #bbb;
+            border-radius: 3px;
+        }
+
+        .pick {
+            padding: 6px 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .pick:last-child {
+            border-bottom: 0;
+        }
+
+        .pick:hover {
+            background: #f0f5ff;
+        }
+
+        .pick[aria-selected="true"] {
+            background: #dceaf8;
+        }
+
+        .pick[aria-disabled="true"] {
+            color: #aaa;
+            cursor: default;
+            background: none;
+        }
+
+        .pick .sub {
+            margin-top: 2px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .pick[aria-disabled="true"] .sub {
+            color: #bbb;
+        }
+
+        .empty {
+            padding: 8px;
+            color: #999;
+        }
+
+        /* Phrases */
+        .phrases {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .phrase {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .phrase input {
+            margin-top: 2px;
+        }
+
+        .phrase .title {
+            font-weight: bold;
+        }
+
+        .phrase .sub {
+            margin-top: 2px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            background: #e4eef8;
+            color: #1f4f7a;
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        .footer {
+            flex: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        #create {
+            flex: none;
+            padding: 7px 16px;
+            border: 1px solid #1f6fb2;
+            border-radius: 3px;
+            background: #1f6fb2;
+            color: #fff;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        #create:disabled {
+            border-color: #9bb8d3;
+            background: #9bb8d3;
+            cursor: default;
+        }
+
+        #status {
+            flex: 1;
+            min-width: 0;
+            color: #555;
+        }
+
+        #status.problem {
+            color: #c0392b;
+        }
+
+        .login {
+            margin-top: 6px;
+            padding: 5px 12px;
+            border: 1px solid #1f6fb2;
+            border-radius: 3px;
+            background: #fff;
+            color: #1f6fb2;
+            font: inherit;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <form id="form" novalidate>
+        <fieldset>
+            <legend>Dokument</legend>
+            <label class="choice" id="current-choice" hidden>
+                <input type="radio" name="target" value="current">
+                <span id="current-label">Det åbne dokument</span>
+            </label>
+            <label class="choice">
+                <input type="radio" name="target" value="existing">
+                <span>Et andet dokument</span>
+            </label>
+            <div class="sub-form" id="existing-form" hidden>
+                <input id="document-search" type="search" autocomplete="off"
+                       placeholder="Søg efter dokumenter, eller vælg blandt dine seneste og favoritter">
+                <ul class="pick-list" id="documents" role="listbox" aria-label="Dokumenter"></ul>
+            </div>
+            <label class="choice">
+                <input type="radio" name="target" value="new">
+                <span>Nyt dokument på en sag</span>
+            </label>
+            <div class="sub-form" id="new-form" hidden>
+                <div class="field">
+                    <label class="required" for="case-search">Sag</label>
+                    <input id="case-search" type="search" autocomplete="off" placeholder="Søg på sagsnummer eller titel">
+                    <ul class="pick-list" id="cases" role="listbox" aria-label="Sager" hidden></ul>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label class="required" for="doc-title">Dokumenttitel</label>
+                        <input id="doc-title" type="text" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label class="required" for="category">Dokumentkategori</label>
+                        <select id="category">
+                            <option value="">Vælg...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="hint" id="target-hint"></div>
+        </fieldset>
+
+        <fieldset>
+            <legend class="required">Skabelon</legend>
+            <input id="template-search" type="search" autocomplete="off" placeholder="Søg på navn eller filnavn">
+            <ul class="pick-list" id="templates" role="listbox" aria-label="Skabeloner"></ul>
+        </fieldset>
+
+        <fieldset>
+            <label class="heading" for="filename">Filnavn</label>
+            <input id="filename" type="text" autocomplete="off">
+            <div class="hint" id="filename-hint"></div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Fraser</legend>
+            <ul class="phrases" id="phrases"></ul>
+        </fieldset>
+    </form>
+
+    <div class="footer">
+        <button id="create" type="button">Opret og rediger</button>
+        <div id="status" aria-live="polite"></div>
+    </div>
+
+    <script src="scripts/fromtemplate-window.js"></script>
+</body>
+</html>

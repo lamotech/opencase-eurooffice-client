@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>Send med email</title>
+
+    <script src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+    <script src="scripts/settings.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/api.js"></script>
+    <link rel="stylesheet" href="resources/styles/send.css">
+</head>
+
+<body>
+    <div id="content">
+        <h2 id="heading">Send med email</h2>
+        <div class="muted" id="document-label"></div>
+
+        <form id="form" novalidate hidden style="margin-top: 12px">
+            <div class="field">
+                <span class="label">Fra</span>
+                <div id="from"></div>
+            </div>
+
+            <div class="field">
+                <label class="required" for="to-input">Til</label>
+                <div class="recipients" data-field="to"></div>
+            </div>
+
+            <div class="field">
+                <label for="cc-input">Cc</label>
+                <div class="recipients" data-field="cc"></div>
+            </div>
+
+            <div class="field">
+                <label for="bcc-input">Bcc</label>
+                <div class="recipients" data-field="bcc"></div>
+            </div>
+
+            <div class="field">
+                <label class="required" for="subject">Emne</label>
+                <input id="subject" type="text" autocomplete="off">
+            </div>
+
+            <div class="field">
+                <span class="label" id="message-label">Besked</span>
+                <div class="toolbar" id="toolbar" role="toolbar" aria-label="Formatering"></div>
+                <div class="editor" id="message" contenteditable="true" role="textbox" aria-multiline="true"
+                     aria-labelledby="message-label"></div>
+                <div class="muted small" id="message-hint"></div>
+            </div>
+
+            <div class="field" id="files-field" hidden>
+                <span class="label">Filer, der sendes som PDF</span>
+                <div id="files"></div>
+                <div class="muted small">Hver fil konverteres til PDF med sagens og dokumentets flettefelter udfyldt.
+                    PDF-filer sendes, som de er.</div>
+            </div>
+
+            <label class="check">
+                <input id="save-as-document" type="checkbox" checked>
+                Gem som dokument på sagen (som udgående dokument med modtagerne som Modtager)
+            </label>
+        </form>
+    </div>
+
+    <div class="footer">
+        <div id="status" aria-live="polite">Henter...</div>
+        <div class="actions">
+            <button class="button primary" id="send" type="button" hidden>Send</button>
+        </div>
+    </div>
+
+    <script src="scripts/send-common.js"></script>
+    <script src="scripts/email-window.js"></script>
+</body>
+</html>

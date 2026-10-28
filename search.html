@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>Søg i OpenCase</title>
+
+    <script src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+    <script src="scripts/settings.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/api.js"></script>
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        /* The plugin window has a fixed size: results and facets scroll. */
+        body {
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 16px 20px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #222;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 8px;
+        }
+
+        #query {
+            flex: 1;
+            padding: 6px 8px;
+            font: inherit;
+            border: 1px solid #bbb;
+            border-radius: 3px;
+        }
+
+        button {
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .primary {
+            padding: 6px 16px;
+            border: 1px solid #1f6fb2;
+            border-radius: 3px;
+            background: #1f6fb2;
+            color: #fff;
+        }
+
+        .primary:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        #chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        #chips:empty {
+            display: none;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 6px 3px 10px;
+            border: 0;
+            border-radius: 12px;
+            background: #e4eef8;
+            color: #1f4f7a;
+        }
+
+        .chip span {
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .chip:hover,
+        .chip:focus-visible {
+            background: #cfe0f2;
+        }
+
+        .main {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            min-height: 0;
+            margin-top: 12px;
+        }
+
+        #facets {
+            flex: none;
+            width: 200px;
+            overflow-y: auto;
+        }
+
+        .facet-group h4 {
+            margin: 0 0 6px;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #666;
+        }
+
+        .facet-group ul {
+            list-style: none;
+            margin: 0 0 16px;
+            padding: 0;
+        }
+
+        .facet {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            width: 100%;
+            padding: 4px 6px;
+            border: 0;
+            border-radius: 3px;
+            background: none;
+            text-align: left;
+        }
+
+        .facet:hover,
+        .facet:focus-visible {
+            background: #f0f5ff;
+        }
+
+        .facet.active {
+            background: #e4eef8;
+            font-weight: bold;
+        }
+
+        .facet .count {
+            color: #888;
+        }
+
+        #results {
+            flex: 1;
+            min-width: 0;
+            overflow-y: auto;
+        }
+
+        .result {
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .result-heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .file-icon {
+            flex: none;
+            color: #1f6fb2;
+        }
+
+        .file-name {
+            padding: 0;
+            border: 0;
+            background: none;
+            font-weight: bold;
+            color: #1f6fb2;
+            text-align: left;
+        }
+
+        .file-name:hover,
+        .file-name:focus-visible {
+            text-decoration: underline;
+        }
+
+        .badge {
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: #eee;
+            font-size: 11px;
+            color: #555;
+        }
+
+        .case {
+            color: #666;
+        }
+
+        .open-url {
+            display: inline-flex;
+            padding: 2px;
+            border: 0;
+            border-radius: 3px;
+            background: none;
+            color: #1f6fb2;
+        }
+
+        .open-url:hover,
+        .open-url:focus-visible {
+            background: #f0f5ff;
+        }
+
+        .snippet {
+            margin-top: 4px;
+            color: #333;
+        }
+
+        .snippet mark {
+            background: #fff3a8;
+            color: inherit;
+        }
+
+        .meta {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .empty {
+            padding: 12px 0;
+            color: #999;
+        }
+
+        .footer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        #status {
+            flex: 1;
+            min-width: 0;
+            color: #555;
+        }
+
+        .pager {
+            padding: 4px 12px;
+        }
+
+        .login {
+            margin: 12px 0;
+            padding: 6px 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <form class="search-bar" id="search-form">
+        <input id="query" type="search" placeholder="Søg i filer og metadata" aria-label="Søgetekst" autocomplete="off">
+        <button class="primary" id="search-button" type="submit">Søg</button>
+    </form>
+
+    <div id="chips" aria-label="Aktive filtre"></div>
+
+    <div class="main">
+        <nav id="facets" aria-label="Filtre"></nav>
+        <div id="results" aria-live="polite"></div>
+    </div>
+
+    <div class="footer">
+        <div id="status">Skriv en søgetekst, og tryk Søg.</div>
+        <button class="pager" id="prev" type="button" disabled>Forrige</button>
+        <button class="pager" id="next" type="button" disabled>Næste</button>
+    </div>
+
+    <script src="scripts/search-window.js"></script>
+</body>
+</html>

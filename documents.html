@@ -1,0 +1,330 @@
+
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>OpenCase dokumenter</title>
+
+    <script src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+    <script src="scripts/settings.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/api.js"></script>
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        /* The plugin window has a fixed size, so the list itself must scroll. */
+        body {
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0 20px 20px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+        }
+
+        #documents {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        .document {
+            padding: 12px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .heading {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .title {
+            font-weight: bold;
+        }
+
+        .open-url {
+            display: inline-flex;
+            flex: none;
+            padding: 2px;
+            border: 0;
+            border-radius: 3px;
+            background: none;
+            color: #1f6fb2;
+            cursor: pointer;
+        }
+
+        .open-url:hover,
+        .open-url:focus-visible {
+            background: #f0f5ff;
+        }
+
+        .number {
+            margin-left: 24px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        .files {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+        }
+
+        .file {
+            display: block;
+            width: 100%;
+            padding: 6px 8px 6px 20px;
+            border: 0;
+            background: none;
+            font: inherit;
+            text-align: left;
+            color: #1f6fb2;
+            cursor: pointer;
+        }
+
+        .file:hover,
+        .file:focus-visible {
+            background: #f0f5ff;
+            text-decoration: underline;
+        }
+
+        .empty {
+            padding: 6px 8px 6px 20px;
+            color: #999;
+        }
+
+        .login {
+            margin: 12px 0;
+            padding: 6px 14px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        #status {
+            flex: none;
+            margin-bottom: 0;
+            margin-top: 12px;
+            padding: 10px;
+            background: #f5f5f5;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h3 id="title">OpenCase dokumenter</h3>
+
+    <div id="documents"></div>
+
+    <pre id="status">Initialiserer...</pre>
+
+    <script>
+        // Set by the main plugin via "onShowDocuments". A query string on the
+        // window URL is not reliable: the editor appends its own parameters.
+        let type = "recent";
+        // List type → heading. The type is also the API path: /documents/<type>.
+        const HEADINGS = {
+            "favorites": "Favorit dokumenter",
+            "recent": "Seneste dokumenter",
+            "my-documents": "Mine dokumenter"
+        };
+        // Ignores responses from a list that was replaced while loading.
+        let loadId = 0;
+
+        const status = document.getElementById("status");
+
+        const NotLoggedInError = window.OpenCaseApi.NotLoggedInError;
+
+        async function fetchDocuments() {
+            const data = await window.OpenCaseApi.get("/documents/" + type);
+            const list = Array.isArray(data) ? data : (data.documents || data.data);
+            if (!Array.isArray(list)) {
+                throw new Error("Uventet svar fra serveren");
+            }
+            return list;
+        }
+
+        async function loadDocuments() {
+            const id = ++loadId;
+            showStatus("Henter dokumenter...");
+            container.replaceChildren();
+
+            try {
+                const documents = await fetchDocuments();
+                if (id !== loadId) return;
+                if (!documents.length) {
+                    const empty = document.createElement("div");
+                    empty.className = "empty";
+                    empty.textContent = "Ingen dokumenter";
+                    container.appendChild(empty);
+                }
+                documents.forEach(renderDocument);
+                showStatus(documents.length + " dokumenter hentet");
+            } catch (error) {
+                if (id !== loadId) return;
+                if (error instanceof NotLoggedInError) {
+                    showLogin(error.message);
+                } else {
+                    showStatus("FEJL: " + error.message);
+                }
+            }
+        }
+
+        function showLogin(message) {
+            showStatus(message + " (" + window.OpenCaseSettings.getUrl() + ")");
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "login";
+            button.textContent = "Log ind";
+            button.addEventListener("click", function () {
+                button.disabled = true;
+                showStatus("Log ind i browseren, og giv adgang. Venter...");
+                Asc.plugin.sendToPlugin("onLogin", null);
+            });
+            container.replaceChildren(button);
+        }
+
+        window.Asc.plugin.attachEvent("onLoggedIn", function () {
+            loadDocuments();
+        });
+
+        window.Asc.plugin.attachEvent("onLoginFailed", function (data) {
+            showLogin("Login fejlede: " + (data && data.error));
+        });
+
+        function showStatus(message) {
+            status.textContent = message;
+        }
+
+        window.Asc.plugin.init = function () {
+            Asc.plugin.sendToPlugin("onDocumentsReady", null);
+        };
+
+        window.Asc.plugin.attachEvent("onShowDocuments", function (data) {
+            type = data && HEADINGS.hasOwnProperty(data.type) ? data.type : "recent";
+            const heading = HEADINGS[type];
+            document.getElementById("title").textContent = heading;
+            document.title = heading;
+            loadDocuments();
+        });
+
+        // Modtag resultat fra hovedpluginet
+        window.Asc.plugin.attachEvent(
+            "onDesktopApiTest",
+            function (data) {
+                showStatus(JSON.stringify(data, null, 2));
+            }
+        );
+
+        const container = document.getElementById("documents");
+
+        function openFile(file) {
+            showStatus("Åbner " + file.name + "...");
+
+            try {
+                const result = Asc.plugin.sendToPlugin(
+                    "onOpenDocument",
+                    {
+                        fileId: file.fileId,
+                        name: file.name,
+                        editorUrl: file.editorUrl
+                    }
+                );
+
+                if (!result) {
+                    showStatus(
+                        "Kunne ikke sende dokumentet til hovedpluginet"
+                    );
+                }
+            } catch (error) {
+                showStatus("FEJL: " + error.message);
+            }
+        }
+
+        function renderFile(file) {
+            const item = document.createElement("li");
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "file";
+            button.textContent = file.name;
+            button.title = "Åbn " + file.name;
+            button.addEventListener("click", function () {
+                openFile(file);
+            });
+
+            item.appendChild(button);
+            return item;
+        }
+
+        // Opening the browser is left to the main plugin, which knows how to
+        // reach the system browser from the desktop app.
+        function renderOpenUrlButton(doc) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "open-url";
+            button.title = "Åbn dokumentet i browseren";
+            button.setAttribute("aria-label", "Åbn " + doc.title + " i browseren");
+            button.innerHTML =
+                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+                'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5"/>' +
+                '<path d="M12 9.5V13a.5.5 0 0 1-.5.5h-8A.5.5 0 0 1 3 13V5a.5.5 0 0 1 .5-.5H7"/></svg>';
+            button.addEventListener("click", function () {
+                showStatus("Åbner " + doc.url + " i browseren...");
+                Asc.plugin.sendToPlugin("onOpenUrl", { url: doc.url });
+            });
+            return button;
+        }
+
+        function renderDocument(doc) {
+            const element = document.createElement("div");
+            element.className = "document";
+
+            const heading = document.createElement("div");
+            heading.className = "heading";
+
+            if (doc.url) {
+                heading.appendChild(renderOpenUrlButton(doc));
+            }
+
+            const title = document.createElement("div");
+            title.className = "title";
+            title.textContent = doc.title;
+            heading.appendChild(title);
+
+            const number = document.createElement("div");
+            number.className = "number";
+            number.textContent = "Dokument " + doc.documentnumber;
+
+            const files = document.createElement("ul");
+            files.className = "files";
+
+            if (doc.files && doc.files.length) {
+                doc.files.forEach(function (file) {
+                    files.appendChild(renderFile(file));
+                });
+            } else {
+                const empty = document.createElement("li");
+                empty.className = "empty";
+                empty.textContent = "Ingen filer";
+                files.appendChild(empty);
+            }
+
+            element.appendChild(heading);
+            element.appendChild(number);
+            element.appendChild(files);
+
+            container.appendChild(element);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>OpenCase settings</title>
+  <script type="text/javascript" src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+  <script type="text/javascript" src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins-ui.js"></script>
+  <link rel="stylesheet" href="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.css" />
+  <script type="text/javascript" src="scripts/settings.js"></script>
+  <style>
+    body { margin: 0; padding: 12px 16px; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
+    label { display: block; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 4px 6px; }
+    .row { display: flex; justify-content: space-between; margin-top: 6px; }
+    .error { color: #c0392b; visibility: hidden; }
+    .error.visible { visibility: visible; }
+    a { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <label for="url">OpenCase URL</label>
+  <input id="url" type="url" class="form-control" spellcheck="false" />
+  <div class="row">
+    <span id="error" class="error">Enter a valid http(s) URL.</span>
+    <a id="reset">Reset to default</a>
+  </div>
+  <script type="text/javascript" src="scripts/settings-window.js"></script>
+</body>
+</html>
