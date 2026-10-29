@@ -1,7 +1,7 @@
 {
   "name": "OpenCase",
   "guid": "asc.{0CCBED17-288E-417C-8A84-26832C7AF9D2}",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "minVersion": "8.1.0",
   "variations": [
     {

@@ -14,9 +14,13 @@ Adds an **OpenCase** tab to the editor ribbon (Document, Spreadsheet, Presentati
 
 The editor must be version 8.1 or later, because the plugin uses the `AddToolbarMenuItem` API.
 
-- **Desktop app (Windows):** run `install-plugin.ps1`. It copies the plugin into
+`package-plugin.ps1` builds `dist\opencase-plugin.zip`, the one package for every install below. It holds the plugin and the three install scripts.
+
+- **Desktop app (Windows):** run `install-plugin.ps1` from the repo or the unpacked zip, or `install-plugin.ps1 -Zip opencase-plugin.zip`. It copies the plugin into
   `%LOCALAPPDATA%\Euro-Office\DesktopEditors\data\sdkjs-plugins\{0CCBED17-288E-417C-8A84-26832C7AF9D2}\`. Restart Euro-Office afterwards.
-  Run `install-plugin.ps1 -Uninstall` to remove it. This install has no built-in plugins, so the Plugins tab stays hidden until a plugin is installed.
+  `-Url https://…/` sets the default OpenCase server, and `-Uninstall` removes the plugin. This install has no built-in plugins, so the Plugins tab stays hidden until a plugin is installed.
+  - **Intune or a logon script:** deploy the zip and `install-plugin.ps1`, and run `powershell.exe -ExecutionPolicy Bypass -File install-plugin.ps1 -Zip opencase-plugin.zip -Url https://…/` **in the user context**, because the folder is per user (run as SYSTEM, it installs into the system profile). The exit code is 0 on success and 1 on failure. For detection, check `version` in the installed `config.json`.
+- **Desktop app (Linux):** run `sh install-plugin.sh --zip opencase-plugin.zip --url https://…/` as the user, not with sudo. It installs into `~/.local/share/euro-office/desktopeditors/sdkjs-plugins/{GUID}/` (also tried: `eurooffice`, `Euro-Office`, and a Flatpak's `~/.var/app/<id>/data/…`). The path follows ONLYOFFICE's `~/.local/share/onlyoffice/desktopeditors/` and has not been checked against a Linux Euro-Office install, so pass `--dir <sdkjs-plugins folder>` if it differs. Start Euro-Office once before installing, so its data folder exists. `--uninstall` removes the plugin.
 - **Document Server, package install (needed for documents opened from OpenCase):** the desktop app does not load its locally installed plugins into documents that come from a Document Server. So the OpenCase tab only appears in OpenCase documents if the plugin is installed on the Document Server that OpenCase uses.
   1. On Windows, run `package-plugin.ps1`. It creates `dist\opencase-plugin.zip`.
   2. Copy the zip to the server, then run:
@@ -146,7 +150,7 @@ The icons in `providers/opencase/assets/` are placeholders: 36×36 list icons an
 
 ## Notes
 
-- `plugins.js` is loaded from `onlyoffice.github.io`. If your installation has no internet access, point the `<script>` tags in `index.html` and `settings.html` at a local copy, e.g. `../v1/plugins.js` when the plugin is installed in `sdkjs-plugins`.
+- The ONLYOFFICE plugin SDK (`plugins.js`, `plugins-ui.js`, `plugins.css`) is bundled in `resources/vendor/onlyoffice-plugins/`, so the plugin works without internet access. It is AGPL v3 (see the `LICENSE` there). To update it, download the files again from `https://onlyoffice.github.io/sdkjs-plugins/v1/`.
 
 
 

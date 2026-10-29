@@ -1,5 +1,9 @@
-# Builds dist\opencase-plugin.zip for installing the plugin on a Document Server.
-# Copy the zip to the server, unzip it and run install-server.sh (see README).
+# Builds dist\opencase-plugin.zip, the one package for every install (see README):
+# - Document Server: unzip it on the server and run install-server.sh;
+# - Windows desktop: install-plugin.ps1 -Zip opencase-plugin.zip, or run
+#   install-plugin.ps1 from the unpacked zip;
+# - Linux desktop: sh install-plugin.sh --zip opencase-plugin.zip, or run it
+#   from the unpacked zip.
 $ErrorActionPreference = "Stop"
 
 $config = Get-Content (Join-Path $PSScriptRoot "config.json") -Raw | ConvertFrom-Json
@@ -10,15 +14,17 @@ $zip = Join-Path $dist "opencase-plugin.zip"
 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
 New-Item -ItemType Directory -Force $staging | Out-Null
 
-$files = @("config.json", "scripts", "resources", "install-server.sh") +
+$files = @("config.json", "scripts", "resources", "install-server.sh", "install-plugin.sh", "install-plugin.ps1") +
     (Get-ChildItem $PSScriptRoot -Filter *.html | ForEach-Object Name)
 foreach ($file in $files) {
     Copy-Item -Recurse (Join-Path $PSScriptRoot $file) $staging
 }
 
-# install-server.sh runs on Linux: make sure it has LF line endings.
-$script = Join-Path $staging "install-server.sh"
-[IO.File]::WriteAllText($script, ((Get-Content $script -Raw) -replace "`r`n", "`n"))
+# The shell scripts run on Linux: make sure they have LF line endings.
+foreach ($name in @("install-server.sh", "install-plugin.sh")) {
+    $script = Join-Path $staging $name
+    [IO.File]::WriteAllText($script, ((Get-Content $script -Raw) -replace "`r`n", "`n"))
+}
 
 if (Test-Path $zip) { Remove-Item -Force $zip }
 # Not Compress-Archive: in Windows PowerShell 5.1 it stores "\" in entry names,
