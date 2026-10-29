@@ -8,6 +8,7 @@
     <script src="scripts/settings.js"></script>
     <script src="scripts/auth.js"></script>
     <script src="scripts/api.js"></script>
+    <link rel="stylesheet" href="resources/styles/panel.css">
 
     <style>
         html,
@@ -48,16 +49,6 @@
         .number {
             margin-bottom: 14px;
             color: #666;
-        }
-
-        .badge {
-            flex: none;
-            padding: 2px 8px;
-            border-radius: 10px;
-            background: #eee;
-            font-size: 12px;
-            color: #555;
-            white-space: nowrap;
         }
 
         .badge.final {
@@ -122,21 +113,6 @@
             border-bottom: 1px solid #eee;
         }
 
-        .link {
-            padding: 0;
-            border: 0;
-            background: none;
-            font: inherit;
-            color: #1f6fb2;
-            text-align: left;
-            cursor: pointer;
-        }
-
-        .link:hover,
-        .link:focus-visible {
-            text-decoration: underline;
-        }
-
         .current {
             font-weight: bold;
         }
@@ -152,78 +128,6 @@
             display: flex;
             gap: 8px;
             margin-top: 14px;
-        }
-
-        .button {
-            padding: 6px 14px;
-            border: 1px solid #1f6fb2;
-            border-radius: 3px;
-            background: #fff;
-            font: inherit;
-            color: #1f6fb2;
-            cursor: pointer;
-        }
-
-        .button.primary {
-            background: #1f6fb2;
-            color: #fff;
-        }
-
-        .button:disabled {
-            border-color: #aaa;
-            color: #aaa;
-            cursor: default;
-        }
-
-        .button.primary:disabled {
-            background: #9bb8d3;
-            border-color: #9bb8d3;
-            color: #fff;
-        }
-
-        .button.small {
-            padding: 3px 10px;
-            font-size: 12px;
-        }
-
-        .button.danger {
-            border-color: #c0392b;
-            color: #c0392b;
-        }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 4px;
-            margin: 4px 0 12px;
-            border-bottom: 1px solid #ccc;
-        }
-
-        .tab {
-            margin-bottom: -1px;
-            padding: 7px 14px;
-            border: 1px solid transparent;
-            border-radius: 3px 3px 0 0;
-            background: none;
-            font: inherit;
-            color: #555;
-            cursor: pointer;
-        }
-
-        .tab[aria-selected="true"] {
-            border-color: #ccc;
-            border-bottom-color: #fff;
-            background: #fff;
-            color: #222;
-            font-weight: bold;
-        }
-
-        .tab-panel[hidden] {
-            display: none;
-        }
-
-        .tab-panel > .section-head:first-child {
-            margin-top: 0;
         }
 
         /* Favourite star */
@@ -262,179 +166,6 @@
             border-radius: 3px;
             font: inherit;
             background: #fff;
-        }
-
-        .section-head {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 18px 0 6px;
-        }
-
-        .section-head h3 {
-            flex: 1;
-            margin: 0;
-        }
-
-        .locked-note {
-            margin-bottom: 6px;
-            font-size: 12px;
-            color: #8a5a00;
-        }
-
-        /* Contacts and notes */
-        .items {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .item {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding: 7px 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        .item .body {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .item .name {
-            font-weight: bold;
-        }
-
-        .item .sub {
-            margin-top: 2px;
-            font-size: 12px;
-            color: #666;
-        }
-
-        .item .role {
-            margin-left: 6px;
-            font-weight: normal;
-        }
-
-        .item .tools {
-            display: flex;
-            flex: none;
-            gap: 4px;
-        }
-
-        .note-text {
-            margin-top: 4px;
-        }
-
-        .note-text > :first-child {
-            margin-top: 0;
-        }
-
-        .note-text > :last-child {
-            margin-bottom: 0;
-        }
-
-        .none {
-            padding: 6px 0;
-            color: #999;
-        }
-
-        /* Dialogs inside the panel: confirmations, adding a contact, notes */
-        .overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 20;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            background: rgba(0, 0, 0, 0.25);
-        }
-
-        .dialog {
-            box-sizing: border-box;
-            width: 100%;
-            max-width: 560px;
-            max-height: 100%;
-            overflow-y: auto;
-            padding: 16px;
-            border-radius: 4px;
-            background: #fff;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
-        }
-
-        .dialog h4 {
-            margin: 0 0 12px;
-            font-size: 15px;
-        }
-
-        .dialog .field {
-            margin-bottom: 10px;
-        }
-
-        .dialog label {
-            display: block;
-            margin-bottom: 3px;
-            font-weight: bold;
-        }
-
-        .dialog label.inline {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: normal;
-        }
-
-        .dialog .field input,
-        .dialog .field select {
-            width: 100%;
-        }
-
-        .dialog .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 0 10px;
-        }
-
-        .dialog .hint {
-            margin: -4px 0 10px;
-            font-size: 12px;
-            color: #777;
-        }
-
-        .dialog .error {
-            margin-bottom: 10px;
-            color: #c0392b;
-        }
-
-        .dialog .error:empty {
-            display: none;
-        }
-
-        .dialog .buttons {
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .results {
-            max-height: 200px;
-            overflow-y: auto;
-            margin: 8px 0;
-            padding: 0;
-            list-style: none;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-        }
-
-        .results .item {
-            padding: 6px 8px;
-        }
-
-        .results .item:last-child {
-            border-bottom: 0;
         }
 
         /* Rich text for notes */
@@ -499,6 +230,8 @@
     <div id="content" aria-live="polite"></div>
     <div id="status">Henter dokumentinformation...</div>
 
+    <script src="scripts/panel.js"></script>
+    <script src="scripts/contacts.js"></script>
     <script src="scripts/docinfo-window.js"></script>
 </body>
 </html>

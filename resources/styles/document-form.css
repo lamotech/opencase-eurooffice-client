@@ -1,0 +1,198 @@
+/* The new-document form (Info and Afsendere/modtagere tabs) shared by Gem i
+   OpenCase and Ny fil fra skabelon; see scripts/document-form.js. */
+
+.document-form .field {
+    margin-bottom: 12px;
+}
+
+.document-form .row {
+    display: flex;
+    gap: 12px;
+}
+
+.document-form .row .field {
+    flex: 1;
+    min-width: 0;
+}
+
+.document-form label,
+.document-form .label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+.document-form .required::after {
+    content: " *";
+    color: #c0392b;
+}
+
+.document-form input,
+.document-form select {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 5px 7px;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    font: inherit;
+    background: #fff;
+}
+
+.document-form input:focus,
+.document-form select:focus,
+.document-form .editor:focus {
+    outline: 2px solid #9cc3e8;
+    outline-offset: -1px;
+}
+
+.document-form .invalid {
+    border-color: #c0392b;
+}
+
+.document-form .error {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #c0392b;
+}
+
+.document-form .error:empty {
+    display: none;
+}
+
+.document-form .hint {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #777;
+}
+
+.document-form .hint:empty {
+    display: none;
+}
+
+/* Case picker */
+.document-form .case-picker {
+    position: relative;
+}
+
+.document-form .case-results {
+    position: absolute;
+    z-index: 10;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    background: #fff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.document-form .case-results[hidden] {
+    display: none;
+}
+
+.document-form .case-option {
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+.document-form .case-option .sub {
+    font-size: 12px;
+    color: #777;
+}
+
+.document-form .case-option.active {
+    background: #e4eef8;
+}
+
+.document-form .case-option[aria-disabled="true"] {
+    color: #aaa;
+    cursor: default;
+}
+
+.document-form .case-option[aria-disabled="true"] .sub {
+    color: #bbb;
+}
+
+.document-form .case-message {
+    padding: 6px 8px;
+    color: #777;
+}
+
+.document-form .selected-case {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 7px;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    background: #f0f5ff;
+}
+
+.document-form .selected-case span {
+    flex: 1;
+    min-width: 0;
+}
+
+.document-form .link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: #1f6fb2;
+    cursor: pointer;
+}
+
+/* Rich text editor */
+.document-form .toolbar {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid #bbb;
+    border-bottom: 0;
+    border-radius: 3px 3px 0 0;
+    background: #f5f5f5;
+}
+
+.document-form .toolbar button {
+    min-width: 28px;
+    height: 26px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.document-form .toolbar button:hover,
+.document-form .toolbar button:focus-visible {
+    border-color: #ccc;
+    background: #fff;
+}
+
+.document-form .editor {
+    min-height: 100px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 6px 8px;
+    border: 1px solid #bbb;
+    border-radius: 0 0 3px 3px;
+}
+
+.document-form .editor p {
+    margin: 0 0 6px;
+}
+
+.document-form .section-head h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    color: #666;
+}
+
+/* Checkboxes in the contact dialogs are not full width. */
+.document-form input[type="checkbox"] {
+    width: auto;
+}

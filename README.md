@@ -77,7 +77,7 @@ All endpoints are under `/index.php/apps/opencase/desktop/v1/api`.
 | `POST /documents/{id}/files` | Basic | multipart: `file` | `201 { fileId, name, editorUrl }` |
 | `GET /files/{fileId}/document` | Basic | none | the document of a file, with all metadata. Used by **Dokument info** |
 | `GET /templates` | Basic | `search`, `caseId` | `[{ id, name, originalFilename, mimeType, size, createdAt, uploadedBy, canEdit, fileId, editorUrl }]`, newest first. Used by **Åbn skabelon**; `editorUrl` (set when `canEdit`) opens the template itself, so saving changes it for everyone |
-| `GET /me` | Basic | none | `{ id, displayName, canManageTemplates }`. **Ny skabelon** is only shown when `canManageTemplates` is `true` |
+| `GET /me` | Basic | none | `{ id, displayName, isOpenCaseUser, canManageTemplates, canSendDigitalPost }`. Only Indstillinger, Log ind/ud and Åbn OpenCase are shown until the user is logged in with `isOpenCaseUser` `true`; `false` or a `403` shows **Ingen adgang** (the login is kept). The template and phrase buttons need `canManageTemplates`, **Send Digital post** needs `canSendDigitalPost` |
 | `GET /organisations` | Basic | none | `[{ uuid, name, parentUuid, depth }]` in display order |
 | `GET /phrases` | Basic | `orgUuids` (comma-separated), `templateFormat` (`blank`, `docx`, `odt`, `xlsx`, `ods`) | `[{ id, title, description, categoryPath, status, fileFormat, formatNote }]` |
 | `POST /templates` | Basic | JSON `{ name, orgUuids, phrases: [{ phraseId, isRequired, isDefault }] }` for a blank file, or multipart `file`, `name`, `orgUuids` and `phrases` (JSON strings) for an upload | `201` with the template, as in `GET /templates`. `400 { error }` shown as it is, `403` without template rights |
@@ -100,6 +100,12 @@ All endpoints are under `/index.php/apps/opencase/desktop/v1/api`.
 | `GET /documents/{id}/email/recipients` | Basic | `q` (2+ characters) | recipients to pick, sent back as they are |
 | `POST /documents/{id}/email/access` | Basic | JSON `{ emails }` | `[{ email, documentAccess }]` for typed addresses |
 | `POST /documents/{id}/email/link`, `POST /documents/{id}/email/pdf` | Basic | JSON `{ to, cc, bcc, subject, bodyHtml, saveAsDocument }` (+ `fileIds` for PDF) | `{ sent, attachments }`. `400`, `412` no Mail account, `422` conversion failed, `502` mail server refused |
+| `GET /phrases` | Basic | `search`, `status`, `orgUuids`, `templateFormat` | phrases sorted by category path and title. Used by **Åbn frase**, **Frase info** and **Indsæt frase** (and by **Ny skabelon**) |
+| `GET /phrases/{id}`, `PUT /phrases/{id}` | Basic | JSON with any of `title`, `description`, `content`, `categoryId`, `status`, `scopes` | the phrase with `content`, `scopes`, `templates`. Used by **Frase info** |
+| `POST /phrases` | Basic | JSON (`blankFile: true` for a file to write in the editor, or `content`), or multipart with `file` | `201` with the phrase; `fileError` if only the file failed. Used by **Ny frase** |
+| `POST /phrases/{id}/file` | Basic | multipart `file`, or JSON `{ blank: true }` | the phrase, with `editorUrl` |
+| `GET /phrases/{id}/content` | Basic | none | `{ source, html, text, fileUrl }`. Used by **Indsæt frase** |
+| `GET /phrase-categories`, `GET /case-types` | Basic | none | categories in tree order with `depth`; case types `[{ id, name }]` |
 | `GET /templates/{id}/phrases` | Basic | `documentId` or `caseId` | `[{ phraseId, title, description, categoryPath, isRequired, isDefault }]` in the template's order. Used by **Ny fil fra skabelon** |
 | `POST /documents/{id}/files/from-template` | Basic | JSON `{ templateId, filename, phraseIds }` | `201 { fileId, name, editorUrl, document }`. `400`/`404` with `error`, `500` when the merge fails |
 | `GET /templates/fields` | Basic | none | `{ syntax, groups: [{ key, label, note, fields: [{ name, placeholder, da, en, description }] }] }`. Used by the **Indsæt flettefelt** menu, which inserts `placeholder` at the cursor |
@@ -141,3 +147,17 @@ The icons in `providers/opencase/assets/` are placeholders: 36×36 list icons an
 ## Notes
 
 - `plugins.js` is loaded from `onlyoffice.github.io`. If your installation has no internet access, point the `<script>` tags in `index.html` and `settings.html` at a local copy, e.g. `../v1/plugins.js` when the plugin is installed in `sdkjs-plugins`.
+
+
+
+-----------------------------------
+On "Gem i OpenCase" dialog:
+Add 2 tabs:
+"Info" - with the current fields
+"Afsendere/modtagere" - as Afsendere/modtagere on Document info dialog where user can add contacts.
+
+
+-----------------------------------
+On "Ny fil fra skabelon" dialog:
+When user chooses "Nyt dokument på en sag" it must show the same 2 tabs and fields as on "Gem i OpenCase"
+

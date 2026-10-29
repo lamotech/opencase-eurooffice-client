@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <title>Ingen adgang</title>
+
+    <script src="https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 14px 20px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #222;
+        }
+
+        p {
+            margin: 0 0 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <p><strong>Du har ikke adgang til OpenCase.</strong></p>
+    <p>Du er logget ind, men en administrator skal give dig adgang, før du kan bruge OpenCase.
+        Når du har fået adgang, kan du klikke på <strong>Ingen adgang</strong> i OpenCase-fanen for at tjekke igen.</p>
+
+    <script>
+        // Only text; the main plugin closes the window (OK or X).
+        window.Asc.plugin.init = function () {};
+        window.Asc.plugin.button = function () {};
+    </script>
+</body>
+</html>

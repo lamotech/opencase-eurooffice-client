@@ -10,10 +10,6 @@
   var form = $("form");
   var documentSearch = $("document-search");
   var documentsList = $("documents");
-  var caseSearch = $("case-search");
-  var casesList = $("cases");
-  var docTitle = $("doc-title");
-  var category = $("category");
   var targetHint = $("target-hint");
   var templateSearch = $("template-search");
   var templatesList = $("templates");
@@ -27,20 +23,27 @@
   var currentDocument = null; // GET /files/{fileId}/document of the open file
   var listDocuments = null;  // recent, favorites and my documents, merged
   var pickedDocument = null;
-  var pickedCase = null;
   var templates = [];
   var pickedTemplate = null;
   var phrases = [];
   var contextKey = null;     // the context templates and phrases were loaded for
   var filenameTouched = false; // the user typed their own file name
-  var createdDocument = null;  // a new document, kept so a retry doesn't create another
   var saving = false;
   var templateLoadId = 0;
   var phraseLoadId = 0;
   var documentSearchId = 0;
-  var caseSearchId = 0;
   var documentTimer = null;
-  var caseTimer = null;
+
+  // "Nyt dokument på en sag": the same Info and Afsendere/modtagere tabs as
+  // Gem i OpenCase (scripts/document-form.js). The templates and phrases
+  // follow the picked case.
+  var documentForm = window.OpenCaseDocumentForm.create($("new-form"), {
+    idPrefix: "new-",
+    submitLabel: "Opret og rediger",
+    showStatus: showStatus,
+    onNotLoggedIn: showLogin,
+    onCaseChange: function () { contextChanged(); }
+  });
 
   function showStatus(message, problem) {
     status.textContent = message;
@@ -122,7 +125,8 @@
       case "existing":
         return pickedDocument ? { documentId: pickedDocument.id } : null;
       case "new":
-        return pickedCase ? { caseId: pickedCase.id } : null;
+        var picked = documentForm.selectedCase();
+        return picked ? { caseId: picked.id } : null;
     }
     return null;
   }
@@ -137,7 +141,9 @@
     $("new-form").hidden = value !== "new";
     targetHint.textContent = "";
     if (value === "existing" && !listDocuments) loadListDocuments();
-    if (value === "new" && category.options.length <= 1) loadCategories();
+    if (value === "new" && !documentForm.listsLoaded()) {
+      documentForm.loadLists().catch(function (error) { handleError(error); });
+    }
     contextChanged();
   }
 
@@ -237,61 +243,6 @@
     }
   }
 
-  // New document: the case must allow writing.
-  caseSearch.addEventListener("input", function () {
-    clearTimeout(caseTimer);
-    var text = caseSearch.value.trim();
-    casesList.hidden = !text;
-    if (!text) return;
-    caseTimer = setTimeout(function () { searchCases(text); }, SEARCH_DELAY_MS);
-  });
-
-  async function searchCases(text) {
-    var id = ++caseSearchId;
-    message(casesList, "Søger...");
-    try {
-      var cases = await window.OpenCaseApi.get("/cases", { search: text });
-      if (id !== caseSearchId) return;
-      renderCases(cases || []);
-    } catch (error) {
-      if (id !== caseSearchId) return;
-      message(casesList, "");
-      handleError(error);
-    }
-  }
-
-  function renderCases(cases) {
-    renderPickList(casesList, cases, {
-      label: caseLabel,
-      sub: function (c) {
-        return [c.organisation, c.status, c.canWrite ? null : "ingen skriveadgang"].filter(Boolean).join(" · ");
-      },
-      disabled: function (c) { return !c.canWrite; },
-      selected: function (c) { return !!pickedCase && pickedCase.id === c.id; },
-      onPick: function (c) {
-        pickedCase = c;
-        createdDocument = null;
-        renderCases(cases);
-        contextChanged();
-      },
-      empty: "Ingen sager fundet"
-    });
-  }
-
-  async function loadCategories() {
-    try {
-      var categories = await window.OpenCaseApi.get("/document-categories");
-      while (category.options.length > 1) category.remove(1);
-      (categories || []).forEach(function (item) {
-        var option = new Option(item.name, String(item.id));
-        if (item.description) option.title = item.description;
-        category.add(option);
-      });
-    } catch (error) {
-      handleError(error);
-    }
-  }
-
   // --- Template -----------------------------------------------------------------
 
   function contextChanged() {
@@ -359,17 +310,13 @@
     var ext = template && extensionOf(template.originalFilename);
     filenameHint.textContent = ext ? "Filtypen (" + ext + ") bevares." : "";
     // A new document gets the template's name as its title, unless typed.
-    if (template && !docTitle.dataset.touched) docTitle.value = template.name;
+    if (template) documentForm.setTitle(template.name);
     loadPhrases();
   }
 
   filenameInput.addEventListener("input", function () {
     // Empty again: follow the template's name once more.
     filenameTouched = filenameInput.value.trim() !== "";
-  });
-
-  docTitle.addEventListener("input", function () {
-    docTitle.dataset.touched = docTitle.value.trim() ? "1" : "";
   });
 
   // --- Phrases ------------------------------------------------------------------
@@ -461,11 +408,7 @@
     var value = target();
     if (!value) return "Vælg, hvilket dokument filen skal oprettes på.";
     if (value === "existing" && !pickedDocument) return "Vælg et dokument.";
-    if (value === "new") {
-      if (!pickedCase) return "Vælg en sag til det nye dokument.";
-      if (!docTitle.value.trim()) return "Skriv en titel til det nye dokument.";
-      if (!category.value) return "Vælg en dokumentkategori til det nye dokument.";
-    }
+    if (value === "new" && !documentForm.validate()) return "Udfyld de påkrævede felter for det nye dokument.";
     if (!pickedTemplate) return "Vælg en skabelon.";
     return null;
   }
@@ -480,18 +423,12 @@
 
     saving = true;
     createButton.disabled = true;
+    documentForm.setBusy(true);
     try {
       var documentId;
       if (target() === "new") {
-        if (!createdDocument) {
-          showStatus("Opretter dokumentet...");
-          createdDocument = await window.OpenCaseApi.post("/documents", { json: {
-            caseId: pickedCase.id,
-            title: docTitle.value.trim(),
-            documentCategoryId: Number(category.value)
-          } });
-        }
-        documentId = createdDocument.id;
+        // Once, with its contacts; a retry reuses the document.
+        documentId = (await documentForm.createDocument()).id;
       } else {
         documentId = context().documentId;
       }
@@ -509,8 +446,10 @@
     } catch (error) {
       if (error.status === 500) {
         showStatus("Kunne ikke oprette fil fra skabelon", true);
-      } else if (createdDocument && target() === "new") {
-        handleError(error, "Dokumentet " + (createdDocument.documentnumber || "") +
+      } else if (error.contactProblem) {
+        showStatus(error.message, true);
+      } else if (documentForm.createdDocument() && target() === "new") {
+        handleError(error, "Dokumentet " + (documentForm.createdDocument().documentnumber || "") +
           " er oprettet, men filen blev ikke oprettet: ");
       } else {
         handleError(error);
@@ -518,6 +457,7 @@
     } finally {
       saving = false;
       createButton.disabled = false;
+      documentForm.setBusy(false);
     }
   }
 

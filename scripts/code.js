@@ -1,4 +1,7 @@
 (function (window) {
+  // Every window is shown with isViewer: true; without it the editor doesn't
+  // show plugin windows in view mode, so the buttons did nothing in
+  // read-only documents.
   var TAB_ID = "opencase_tab";
   var OPEN_BUTTON_ID = "opencase_open";
   var SETTINGS_BUTTON_ID = "opencase_settings";
@@ -33,9 +36,26 @@
   var TEMPLATES_BUTTON_ID = "opencase_templates";
   var templatesWindow = null;
 
+  // Phrases (Fraser): one window for the four buttons, see phrases.html.
+  var PHRASE_BUTTONS = [
+    { id: "opencase_phrase_new", mode: "new", text: "Ny frase", hint: "Opret en ny frase", icon: "phrase-new" },
+    { id: "opencase_phrase_open", mode: "open", text: "Åbn frase", hint: "Åbn en frases fil i editoren", icon: "phrase-open" },
+    { id: "opencase_phrase_info", mode: "info", text: "Frase info", hint: "Se og ret en frase", icon: "phrase-info" },
+    { id: "opencase_phrase_insert", mode: "insert", text: "Indsæt frase", hint: "Indsæt en frases tekst ved markøren", icon: "phrase-insert" }
+  ];
+  var phrasesWindow = null;
+
   var NEW_TEMPLATE_BUTTON_ID = "opencase_new_template";
   var newTemplateWindow = null;
-  var canManageTemplates = false; // from GET /me
+
+  // From GET /me. access: null until known (or not logged in), "user", "none"
+  // (logged in, but no access to OpenCase: isOpenCaseUser false or 403) or
+  // "error" (OpenCase didn't answer). Only "user" shows the OpenCase buttons.
+  var access = null;
+  var canManageTemplates = false;
+  var canSendDigitalPost = false;
+  var ACCESS_BUTTON_ID = "opencase_access";
+  var noAccessWindow = null;
 
   // Dropdown with the merge fields from GET /templates/fields. Its menu items
   // are "<id>_oo_sep_<value>": plugins.js calls the handler attached to <id>
@@ -80,103 +100,128 @@
               lockInViewMode: false,
               enableToggle: false,
               separator: false
-            },
-            {
-              id: FROM_TEMPLATE_BUTTON_ID,
-              type: "big-button",
-              text: "Ny fil fra skabelon",
-              hint: "Opret en fil på et dokument i OpenCase ud fra en skabelon",
-              icons: "resources/icons/from-template.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: true
-            },
-            // Only a local file can be saved to OpenCase; a document opened
-            // from OpenCase (Document Server) is already there and shows its
-            // metadata instead.
-            isLocalDesktopFile() ? {
-              id: SAVE_BUTTON_ID,
-              type: "big-button",
-              text: "Gem i OpenCase",
-              hint: "Gem dokumentet som et nyt dokument på en sag i OpenCase",
-              icons: "resources/icons/save.svg",
-              lockInViewMode: true,
-              enableToggle: false,
-              separator: false
-            } : {
-              id: DOCINFO_BUTTON_ID,
-              type: "big-button",
-              text: "Dokument info",
-              hint: "Vis oplysninger om dokumentet i OpenCase",
-              icons: "resources/icons/docinfo.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: false
-            },
-            {
-              id: MY_DOCUMENTS_BUTTON_ID,
-              type: "big-button",
-              text: "Mine dokumenter",
-              hint: "Vis dine dokumenter",
-              icons: "resources/icons/my-documents.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: true
-            },
-            {
-              id: RECENT_BUTTON_ID,
-              type: "big-button",
-              text: "Seneste dokumenter",
-              hint: "Vis de senest anvendte dokumenter",
-              icons: "resources/icons/recent.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: false
-            },
-            {
-              id: FAVORITES_BUTTON_ID,
-              type: "big-button",
-              text: "Favorit dokumenter",
-              hint: "Vis dine favoritdokumenter",
-              icons: "resources/icons/favorites.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: false
-            },
-            {
-              id: SEARCH_BUTTON_ID,
-              type: "big-button",
-              text: "Søg dokument",
-              hint: "Søg i filer og metadata i OpenCase",
-              icons: "resources/icons/search.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: false
             }
-          ].concat(isLocalDesktopFile() ? [] : getSendButtons()).concat(canManageTemplates ? [
-            {
-              id: NEW_TEMPLATE_BUTTON_ID,
-              type: "big-button",
-              text: "Ny skabelon",
-              hint: "Opret en ny dokumentskabelon i OpenCase",
-              icons: "resources/icons/new-template.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: true
-            },
-            {
-              id: TEMPLATES_BUTTON_ID,
-              type: "big-button",
-              text: "Åbn skabelon",
-              hint: "Åbn en dokumentskabelon fra OpenCase til redigering",
-              icons: "resources/icons/template.svg",
-              lockInViewMode: false,
-              enableToggle: false,
-              separator: false
-            }
-          ].concat(supportsMergeFields() ? [getMergeFieldsButton()] : []) : [])
+          ].concat(access === "user" ? getOpenCaseButtons() : access ? [getAccessButton()] : [])
         }
       ]
+    };
+  }
+
+  // The buttons for users with access to OpenCase (GET /me isOpenCaseUser).
+  // They all appear in one update, so the editor appends them in this order.
+  function getOpenCaseButtons() {
+    return [
+      {
+        id: FROM_TEMPLATE_BUTTON_ID,
+        type: "big-button",
+        text: "Ny fil fra skabelon",
+        hint: "Opret en fil på et dokument i OpenCase ud fra en skabelon",
+        icons: "resources/icons/from-template.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: true
+      },
+      // Only a local file can be saved to OpenCase; a document opened
+      // from OpenCase (Document Server) is already there and shows its
+      // metadata instead.
+      isLocalDesktopFile() ? {
+        id: SAVE_BUTTON_ID,
+        type: "big-button",
+        text: "Gem i OpenCase",
+        hint: "Gem dokumentet som et nyt dokument på en sag i OpenCase",
+        icons: "resources/icons/save.svg",
+        lockInViewMode: true,
+        enableToggle: false,
+        separator: false
+      } : {
+        id: DOCINFO_BUTTON_ID,
+        type: "big-button",
+        text: "Dokument info",
+        hint: "Vis oplysninger om dokumentet i OpenCase",
+        icons: "resources/icons/docinfo.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: false
+      },
+      {
+        id: MY_DOCUMENTS_BUTTON_ID,
+        type: "big-button",
+        text: "Mine dokumenter",
+        hint: "Vis dine dokumenter",
+        icons: "resources/icons/my-documents.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: true
+      },
+      {
+        id: RECENT_BUTTON_ID,
+        type: "big-button",
+        text: "Seneste dokumenter",
+        hint: "Vis de senest anvendte dokumenter",
+        icons: "resources/icons/recent.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: false
+      },
+      {
+        id: FAVORITES_BUTTON_ID,
+        type: "big-button",
+        text: "Favorit dokumenter",
+        hint: "Vis dine favoritdokumenter",
+        icons: "resources/icons/favorites.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: false
+      },
+      {
+        id: SEARCH_BUTTON_ID,
+        type: "big-button",
+        text: "Søg dokument",
+        hint: "Søg i filer og metadata i OpenCase",
+        icons: "resources/icons/search.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: false
+      }
+    ].concat(isLocalDesktopFile() ? [] : getSendButtons()).concat(canManageTemplates ? [
+      {
+        id: NEW_TEMPLATE_BUTTON_ID,
+        type: "big-button",
+        text: "Ny skabelon",
+        hint: "Opret en ny dokumentskabelon i OpenCase",
+        icons: "resources/icons/new-template.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: true
+      },
+      {
+        id: TEMPLATES_BUTTON_ID,
+        type: "big-button",
+        text: "Åbn skabelon",
+        hint: "Åbn en dokumentskabelon fra OpenCase til redigering",
+        icons: "resources/icons/template.svg",
+        lockInViewMode: false,
+        enableToggle: false,
+        separator: false
+      }
+    ].concat(supportsMergeFields() ? [getMergeFieldsButton()] : [], getPhraseButtons()) : []);
+  }
+
+  // Logged in without access, or OpenCase didn't answer: say so, and check
+  // GET /me again when clicked (the login is kept for that).
+  function getAccessButton() {
+    var none = access === "none";
+    return {
+      id: ACCESS_BUTTON_ID,
+      type: "big-button",
+      text: none ? "Ingen adgang" : "Prøv igen",
+      hint: none
+        ? "Du har ikke adgang til OpenCase. En administrator skal give dig adgang. Klik for at tjekke igen"
+        : "OpenCase svarede ikke. Klik for at prøve igen",
+      icons: "resources/icons/icon.svg",
+      lockInViewMode: false,
+      enableToggle: false,
+      separator: true
     };
   }
 
@@ -269,6 +314,7 @@
           url: "docinfo.html",
           description: "Dokument info",
           isVisual: true,
+          isViewer: true,
           isModal: false,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: [720, 720],
@@ -365,50 +411,77 @@
       });
       if (response.status === 401) {
           window.OpenCaseAuth.clear();
+          resetUserInfo();
+          updateToolbar();
           throw new Error("Login udløbet");
       }
-      if (!response.ok) throw new Error("HTTP " + response.status);
+      if (!response.ok) {
+          var error = new Error("HTTP " + response.status);
+          error.status = response.status;
+          throw error;
+      }
       return response.json();
   }
 
-  // What depends on the login: the merge fields and the Ny skabelon button.
-  // The merge fields are only for template designers, so /me comes first.
+  // What depends on the login. GET /me decides which buttons are shown; the
+  // merge fields are only for template designers, and Digital Post is checked
+  // for the open document.
   function loadServerData() {
-      loadUserInfo().then(function () {
+      return loadUserInfo().then(function () {
+          if (access !== "user") return;
+          var openDocument = loadOpenDocument();
           if (canManageTemplates) loadMergeFields();
+          if (canSendDigitalPost) checkDigitalPost(openDocument);
       });
-      checkDigitalPost();
+  }
+
+  // GET /files/{fileId}/document for the open file. Opening a file in the
+  // editor doesn't go through OpenCase, so this call is what puts the document
+  // at the top of the user's recent list; it is made every time a file from
+  // OpenCase is opened (or the user logs in while it is open). Files created
+  // by the plugin are opened in a new editor, which makes the call itself.
+  // Resolves to the document, or null for a local file or on an error.
+  async function loadOpenDocument() {
+      if (isLocalDesktopFile()) return null;
+      var openFileId = getOpenFileId();
+      if (!openFileId) return null;
+      try {
+          return await mainGet("/files/" + encodeURIComponent(openFileId) + "/document");
+      } catch (error) {
+          console.error("OpenCase open document:", error);
+          return null;
+      }
   }
 
   // Sending works on the open document, so the buttons are only shown for
-  // documents opened from OpenCase. They are disabled until logged in.
+  // documents opened from OpenCase. Send Digital post only when the server
+  // offers Digital Post (GET /me canSendDigitalPost).
   function getSendButtons() {
-      var loggedIn = window.OpenCaseAuth.isLoggedIn();
       var dpUnavailable = digitalPostEnabled === false;
-      return [
+      return (canSendDigitalPost ? [
           {
               id: SEND_DIGITAL_POST_BUTTON_ID,
               type: "big-button",
               text: "Send Digital post",
               hint: dpUnavailable
-                  ? "Digital Post er ikke tilgængelig på denne server"
+                  ? "Digital Post er ikke tilgængelig for dette dokument"
                   : "Send dokumentet med Digital Post, eller se status for forsendelsen",
               icons: "resources/icons/digital-post.svg",
-              disabled: !loggedIn || dpUnavailable,
+              disabled: dpUnavailable,
               lockInViewMode: false,
               enableToggle: false,
               separator: true
-          },
+          }
+      ] : []).concat([
           {
               id: SEND_LINK_BUTTON_ID,
               type: "big-button",
               text: "Send link med email",
               hint: "Send et link til dokumentet i OpenCase med email",
               icons: "resources/icons/email-link.svg",
-              disabled: !loggedIn,
               lockInViewMode: false,
               enableToggle: false,
-              separator: false
+              separator: !canSendDigitalPost
           },
           {
               id: SEND_PDF_BUTTON_ID,
@@ -416,22 +489,19 @@
               text: "Send PDF med email",
               hint: "Send dokumentets filer som PDF med email",
               icons: "resources/icons/email-pdf.svg",
-              disabled: !loggedIn,
               lockInViewMode: false,
               enableToggle: false,
               separator: false
           }
-      ];
+      ]);
   }
 
   // Disables Send Digital post when the server doesn't offer it
   // (GET /documents/{id}/digital-post: enabled false).
-  async function checkDigitalPost() {
-      if (isLocalDesktopFile() || !window.OpenCaseAuth.isLoggedIn()) return;
-      var openFileId = getOpenFileId();
-      if (!openFileId) return;
+  async function checkDigitalPost(openDocument) {
+      var doc = await openDocument;
+      if (!doc) return;
       try {
-          var doc = await mainGet("/files/" + encodeURIComponent(openFileId) + "/document");
           var state = await mainGet("/documents/" + encodeURIComponent(doc.id) + "/digital-post");
           var enabled = !(state && state.enabled === false);
           if (enabled !== digitalPostEnabled) {
@@ -465,6 +535,7 @@
           url: isDigitalPost ? "digitalpost.html" : "email.html",
           description: isDigitalPost ? "Digital post" : kind === "pdf" ? "Send PDF med email" : "Send link med email",
           isVisual: true,
+          isViewer: true,
           isModal: false,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: isDigitalPost ? [760, 640] : [700, 700],
@@ -474,21 +545,69 @@
       });
   }
 
-  // Ny skabelon is only for users who may manage templates (GET /me).
+  // GET /me: does the user have access to OpenCase, and to which features.
+  // A 403 means the same as isOpenCaseUser false. Either way the login is
+  // kept, so /me can be asked again later.
   async function loadUserInfo() {
-      var allowed = false;
+      var me = null;
+      var next = null;
       if (window.OpenCaseAuth.isLoggedIn()) {
           try {
-              var me = await mainGet("/me");
-              allowed = !!(me && me.canManageTemplates);
+              me = await mainGet("/me");
+              next = me && me.isOpenCaseUser === false ? "none" : "user";
           } catch (error) {
               console.error("OpenCase /me:", error);
+              // A 401 logged the user out (mainGet); show only the basic buttons.
+              next = error.status === 403 ? "none" : window.OpenCaseAuth.isLoggedIn() ? "error" : null;
           }
       }
-      if (allowed !== canManageTemplates) {
-          canManageTemplates = allowed;
+      var manage = next === "user" && !!me.canManageTemplates;
+      var digitalPost = next === "user" && !!me.canSendDigitalPost;
+      if (next !== access || manage !== canManageTemplates || digitalPost !== canSendDigitalPost) {
+          access = next;
+          canManageTemplates = manage;
+          canSendDigitalPost = digitalPost;
           updateToolbar();
       }
+  }
+
+  // Logged out, or another server: nothing is known about the user.
+  function resetUserInfo() {
+      access = null;
+      canManageTemplates = false;
+      canSendDigitalPost = false;
+      digitalPostEnabled = null;
+      mergeFields = null;
+  }
+
+  // The "Ingen adgang" / "Prøv igen" button.
+  function onAccessButton() {
+      loadServerData().then(function () {
+          if (access === "none") showNoAccess();
+      });
+  }
+
+  function showNoAccess() {
+      if (noAccessWindow) return;
+      noAccessWindow = new window.Asc.PluginWindow();
+      noAccessWindow.show({
+          url: "noaccess.html",
+          description: "OpenCase",
+          isVisual: true,
+          isViewer: true,
+          isModal: true,
+          EditorsSupport: ["word", "cell", "slide", "pdf"],
+          size: [420, 150],
+          buttons: [
+              { text: "OK", primary: true }
+          ]
+      });
+  }
+
+  function closeNoAccess() {
+      if (!noAccessWindow) return;
+      window.Asc.plugin.executeMethod("CloseWindow", [noAccessWindow.id]);
+      noAccessWindow = null;
   }
 
   async function loadMergeFields() {
@@ -573,7 +692,9 @@
         .finally(function () {
           loginInProgress = null;
           updateToolbar();
-          loadServerData();
+          loadServerData().then(function () {
+            if (access === "none") showNoAccess();
+          });
         });
       updateToolbar();
     }
@@ -583,8 +704,7 @@
   function onLoginButton() {
     if (loginInProgress) return;
     if (window.OpenCaseAuth.isLoggedIn()) {
-      mergeFields = null;
-      canManageTemplates = false;
+      resetUserInfo();
       window.OpenCaseAuth.logout().then(updateToolbar);
       return;
     }
@@ -616,6 +736,7 @@
       url: "settings.html",
       description: "OpenCase settings",
       isVisual: true,
+      isViewer: true,
       isModal: true,
       EditorsSupport: ["word", "cell", "slide", "pdf"],
       size: [420, 160],
@@ -630,8 +751,7 @@
         window.OpenCaseSettings.setUrl(data.url);
         closeSettings();
         // Logins are stored per server, so the button state may change.
-        mergeFields = null;
-        canManageTemplates = false;
+        resetUserInfo();
         updateToolbar();
         loadServerData();
       }
@@ -642,7 +762,7 @@
       return win !== null &&
           (win === documentsWindow || win === searchWindow || win === saveWindow ||
               win === docInfoWindow || win === templatesWindow || win === newTemplateWindow ||
-              win === fromTemplateWindow || win === sendWindow);
+              win === fromTemplateWindow || win === sendWindow || win === phrasesWindow);
   }
 
   // Handlers shared by the documents and search windows.
@@ -683,7 +803,7 @@
           "onLoggedOut",
           function () {
               window.OpenCaseAuth.clear();
-              canManageTemplates = false;
+              resetUserInfo();
               updateToolbar();
           }
       );
@@ -731,6 +851,7 @@
           url: "search.html",
           description: "Søg i OpenCase",
           isVisual: true,
+          isViewer: true,
           isModal: false,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: [960, 640],
@@ -769,9 +890,10 @@
           url: "fromtemplate.html",
           description: "Ny fil fra skabelon",
           isVisual: true,
+          isViewer: true,
           isModal: true,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
-          size: [700, 700],
+          size: [760, 760],
           buttons: [
               { text: "Annuller", primary: false }
           ]
@@ -782,6 +904,89 @@
       if (!fromTemplateWindow) return;
       window.Asc.plugin.executeMethod("CloseWindow", [fromTemplateWindow.id]);
       fromTemplateWindow = null;
+  }
+
+  function getPhraseButtons() {
+      // Text can't be inserted in the PDF editor.
+      var editorType = window.Asc.plugin.info.editorType;
+      return PHRASE_BUTTONS.filter(function (b) {
+          return b.mode !== "insert" || editorType !== "pdf";
+      }).map(function (b) {
+          return {
+              id: b.id,
+              type: "big-button",
+              text: b.text,
+              hint: b.hint,
+              icons: "resources/icons/" + b.icon + ".svg",
+              // Inserting changes the open file; the others don't.
+              lockInViewMode: b.mode === "insert",
+              enableToggle: false,
+              separator: false
+          };
+      });
+  }
+
+  // One phrase window at a time; another button switches it to its mode.
+  function openPhrases(mode) {
+      if (phrasesWindow) {
+          window.Asc.plugin.executeMethod("CloseWindow", [phrasesWindow.id]);
+          phrasesWindow = null;
+      }
+      var win = new window.Asc.PluginWindow();
+      phrasesWindow = win;
+      attachCommonEvents(win);
+
+      win.attachEvent("onPhrasesReady", function () {
+          // Frase info starts on the open file's phrase, if it is one.
+          win.command("onShowPhrases", { mode: mode, fileId: isLocalDesktopFile() ? null : getOpenFileId() });
+      });
+
+      // A new phrase with a blank file: write it in the editor straight away.
+      win.attachEvent("onOpenAndClose", function (data) {
+          try {
+              openDocumentInDesktop(data.editorUrl, data.name);
+          } catch (error) {
+              win.command("onDesktopApiTest", { commandExecuted: false, error: error.message });
+              return;
+          }
+          closePhrases();
+      });
+
+      // Indsæt frase inserted the phrase's file itself (see phrases-window.js).
+      win.attachEvent("onPhraseInserted", function () {
+          closePhrases();
+      });
+
+      // Indsæt frase: HTML where the editor can paste it, else plain text.
+      win.attachEvent("onInsertPhrase", function (data) {
+          var editorType = window.Asc.plugin.info.editorType;
+          if (data.html && editorType !== "cell") {
+              window.Asc.plugin.executeMethod("PasteHtml", [data.html]);
+          } else {
+              window.Asc.plugin.executeMethod("PasteText", [data.text || ""]);
+          }
+          closePhrases();
+      });
+
+      var titles = { "new": "Ny frase", open: "Åbn frase", info: "Frase info", insert: "Indsæt frase" };
+      win.show({
+          url: "phrases.html",
+          description: titles[mode] || "Fraser",
+          isVisual: true,
+          isViewer: true,
+          isModal: false,
+          EditorsSupport: ["word", "cell", "slide", "pdf"],
+          size: [760, 700],
+          buttons: [
+              { text: "Luk", primary: false }
+          ]
+      });
+  }
+
+  function closePhrases() {
+      if (!phrasesWindow) return;
+      window.Asc.plugin.executeMethod("CloseWindow", [phrasesWindow.id]);
+      phrasesWindow = null;
   }
 
   function openNewTemplate() {
@@ -805,6 +1010,7 @@
           url: "newtemplate.html",
           description: "Ny skabelon",
           isVisual: true,
+          isViewer: true,
           isModal: true,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: [680, 640],
@@ -831,6 +1037,7 @@
           url: "templates.html",
           description: "Åbn skabelon",
           isVisual: true,
+          isViewer: true,
           isModal: false,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: [640, 520],
@@ -863,6 +1070,7 @@
           url: "save.html",
           description: "Gem i OpenCase",
           isVisual: true,
+          isViewer: true,
           isModal: true,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: [620, 640],
@@ -912,6 +1120,7 @@
           url: "documents.html",
           description: "OpenCase dokumenter",
           isVisual: true,
+          isViewer: true,
           isModal: false,
           EditorsSupport: ["word", "cell", "slide", "pdf"],
           size: [720, 480],
@@ -995,8 +1204,12 @@
     this.attachToolbarMenuClickEvent(DOCINFO_BUTTON_ID, openDocInfo);
     this.attachToolbarMenuClickEvent(TEMPLATES_BUTTON_ID, openTemplates);
     this.attachToolbarMenuClickEvent(NEW_TEMPLATE_BUTTON_ID, openNewTemplate);
+    PHRASE_BUTTONS.forEach(function (b) {
+      window.Asc.plugin.attachToolbarMenuClickEvent(b.id, function () { openPhrases(b.mode); });
+    });
     this.attachToolbarMenuClickEvent(MERGE_FIELD_ITEM_ID, onMergeFieldItem);
     this.attachToolbarMenuClickEvent(LOGIN_BUTTON_ID, onLoginButton);
+    this.attachToolbarMenuClickEvent(ACCESS_BUTTON_ID, onAccessButton);
   };
 
   // Footer buttons of the settings window: 0 = Save, 1 = Cancel, -1 = close (X).
@@ -1025,6 +1238,16 @@
     if (searchWindow && windowId === searchWindow.id) {
       window.Asc.plugin.executeMethod("CloseWindow", [searchWindow.id]);
       searchWindow = null;
+      return;
+    }
+
+    if (phrasesWindow && windowId === phrasesWindow.id) {
+      closePhrases();
+      return;
+    }
+
+    if (noAccessWindow && windowId === noAccessWindow.id) {
+      closeNoAccess();
       return;
     }
 

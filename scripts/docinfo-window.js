@@ -4,15 +4,14 @@
 // plugin sends the file ID.
 (function (window) {
   var Api = window.OpenCaseApi;
+  var P = window.OpenCasePanel;
   var content = document.getElementById("content");
   var status = document.getElementById("status");
   var fileId = null;
 
   var doc = null;        // the document info
   var statuses = [];     // GET /document-statuses
-  var roles = null;      // GET /contact-roles, loaded when first needed
-  var me = null;         // GET /me, for registerSearch
-  var contacts = [];
+  var contacts = null;   // the Afsendere/modtagere list, see scripts/contacts.js
   var notes = [];
   var contactsBox = null;
   var notesBox = null;
@@ -36,19 +35,8 @@
     status.classList.toggle("problem", !!problem);
   }
 
-  function element(tag, className, text) {
-    var el = document.createElement(tag);
-    if (className) el.className = className;
-    if (text !== undefined && text !== null) el.textContent = text;
-    return el;
-  }
-
-  function button(text, className, onClick) {
-    var b = element("button", className || "button small", text);
-    b.type = "button";
-    b.addEventListener("click", onClick);
-    return b;
-  }
+  var element = P.element;
+  var button = P.button;
 
   function formatDate(value) {
     if (!value) return null;
@@ -161,61 +149,10 @@
     return canWrite() && !isFinal();
   }
 
-  // --- Dialogs inside the panel ----------------------------------------------
-
-  // Shows a dialog over the panel. build(box, close) fills it.
-  function openDialog(title, build) {
-    var overlay = element("div", "overlay");
-    var box = element("div", "dialog");
-    box.setAttribute("role", "dialog");
-    box.setAttribute("aria-modal", "true");
-    box.setAttribute("aria-label", title);
-    box.appendChild(element("h4", null, title));
-    overlay.appendChild(box);
-    function close() {
-      overlay.remove();
-    }
-    overlay.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") close();
-    });
-    build(box, close);
-    document.body.appendChild(overlay);
-    var first = box.querySelector("input, select, [contenteditable], button");
-    if (first) first.focus();
-    return close;
-  }
-
-  // Resolves true when the user confirms.
-  function confirmDialog(title, message, okText) {
-    return new Promise(function (resolve) {
-      openDialog(title, function (box, close) {
-        box.appendChild(element("p", null, message));
-        var buttons = element("div", "buttons");
-        buttons.appendChild(button("Annuller", "button", function () { close(); resolve(false); }));
-        buttons.appendChild(button(okText || "OK", "button primary", function () { close(); resolve(true); }));
-        box.appendChild(buttons);
-      });
-    });
-  }
-
-  function field(box, labelText, control, hint) {
-    var wrap = element("div", "field");
-    var label = element("label", null, labelText);
-    control.id = control.id || "f-" + Math.random().toString(36).slice(2);
-    label.htmlFor = control.id;
-    wrap.appendChild(label);
-    wrap.appendChild(control);
-    box.appendChild(wrap);
-    if (hint) box.appendChild(element("div", "hint", hint));
-    return control;
-  }
-
-  function input(type) {
-    var el = document.createElement("input");
-    el.type = type || "text";
-    el.autocomplete = "off";
-    return el;
-  }
+  var openDialog = P.openDialog;
+  var confirmDialog = P.confirmDialog;
+  var field = P.field;
+  var input = P.input;
 
   // --- Header: favourite and status ------------------------------------------
 
@@ -327,362 +264,43 @@
 
   // --- Contacts ----------------------------------------------------------------
 
-  function maskCpr(cpr) {
-    var digits = String(cpr || "").replace(/\D/g, "");
-    return digits.length >= 6 ? digits.slice(0, 6) + "XXXX" : cpr;
-  }
-
-  function contactNumbers(contact) {
-    var line = element("div", "sub");
-    if (contact.type === "citizen" && contact.cprCvr) {
-      line.appendChild(document.createTextNode("CPR "));
-      // Masked as in OpenCase; shown in full only when clicked.
-      var cpr = linkButton(maskCpr(contact.cprCvr), function () {
-        cpr.textContent = cpr.textContent === contact.cprCvr ? maskCpr(contact.cprCvr) : contact.cprCvr;
-      });
-      cpr.title = "Vis/skjul hele CPR-nummeret";
-      line.appendChild(cpr);
-    } else if (contact.cprCvr) {
-      line.appendChild(document.createTextNode("CVR " + contact.cprCvr));
-    }
-    if (contact.pnumber) line.appendChild(document.createTextNode(" · P-nr. " + contact.pnumber));
-    return line.childNodes.length ? line : null;
-  }
-
-  function addressLine(contact) {
-    var line = element("div", "sub");
-    if (contact.addressProtected) {
-      // Only fetched when clicked: each lookup is logged. Not cached.
-      var reveal = linkButton("Beskyttet adresse", async function () {
-        reveal.disabled = true;
-        try {
+  // Changes go to the document straight away (see scripts/contacts.js).
+  function createContacts(box) {
+    return window.OpenCaseContacts.create({
+      box: box,
+      store: {
+        add: async function (body) {
+          try {
+            return await Api.post(docPath("/contacts"), { json: body });
+          } catch (error) {
+            // 409 also means "final": then it is not a duplicate.
+            if (error.status === 409 && isFinal()) error.duplicate = false;
+            throw error;
+          }
+        },
+        remove: function (contact) {
+          return Api.del(docPath("/contacts/" + encodeURIComponent(contact.id)));
+        },
+        revealAddress: async function (contact) {
           var result = await Api.post(docPath("/contacts/" + encodeURIComponent(contact.id) + "/address"));
-          var address = result && result.address;
-          line.replaceChildren(document.createTextNode(
-            "Beskyttet adresse: " + ((address && formatAddress(address)) || "ingen adresse")));
-        } catch (error) {
-          reveal.disabled = false;
-          reportError(error);
+          return result && result.address;
         }
-      });
-      reveal.title = "Vis den beskyttede adresse. Opslaget logges.";
-      line.appendChild(reveal);
-    } else if (contact.address) {
-      line.textContent = formatAddress(contact.address);
-    }
-    return line.childNodes.length ? line : null;
-  }
-
-  function formatAddress(a) {
-    if (a.formatted) return a.formatted;
-    var street = [a.streetname, a.housenumber].filter(Boolean).join(" ");
-    var unit = [a.floor, a.door].filter(Boolean).join(". ");
-    var town = [a.zipcode, a.zipdistrict].filter(Boolean).join(" ");
-    return [[street, unit].filter(Boolean).join(", "), town].filter(Boolean).join(", ");
-  }
-
-  function renderContacts() {
-    updateTabLabels();
-    contactsBox.replaceChildren();
-    if (!contacts.length) {
-      contactsBox.appendChild(element("div", "none", "Ingen afsendere eller modtagere"));
-      return;
-    }
-    var list = element("ul", "items");
-    contacts.forEach(function (contact) {
-      var li = element("li", "item");
-      var body = element("div", "body");
-      var name = element("div", "name", contact.name);
-      if (contact.role) name.appendChild(element("span", "badge role", contact.role.name));
-      body.appendChild(name);
-      [contactNumbers(contact), addressLine(contact)].forEach(function (line) {
-        if (line) body.appendChild(line);
-      });
-      var reach = [contact.phone, contact.email].filter(Boolean).join(" · ");
-      if (reach) body.appendChild(element("div", "sub", reach));
-      li.appendChild(body);
-
-      if (canChangeContent()) {
-        var tools = element("div", "tools");
-        tools.appendChild(button("Slet", "button small danger", function () { deleteContact(contact); }));
-        li.appendChild(tools);
-      }
-      list.appendChild(li);
+      },
+      canChange: canChangeContent,
+      onChange: updateTabLabels,
+      showStatus: showStatus,
+      onNotLoggedIn: showLogin,
+      errorText: errorText
     });
-    contactsBox.appendChild(list);
   }
 
   async function loadContacts() {
     contactsBox.replaceChildren(element("div", "none", "Henter..."));
     try {
-      contacts = (await Api.get(docPath("/contacts"))) || [];
-      renderContacts();
+      contacts.set((await Api.get(docPath("/contacts"))) || []);
     } catch (error) {
       contactsBox.replaceChildren(element("div", "none", "Kunne ikke hente afsendere og modtagere: " + errorText(error)));
     }
-  }
-
-  async function deleteContact(contact) {
-    var ok = await confirmDialog("Slet kontakt", "Er du sikker på, at du vil slette denne kontakt?", "Slet");
-    if (!ok) return;
-    try {
-      await Api.del(docPath("/contacts/" + encodeURIComponent(contact.id)));
-      contacts = contacts.filter(function (c) { return c.id !== contact.id; });
-      renderContacts();
-      showStatus(contact.name + " er slettet.");
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  async function ensureContactData() {
-    var pending = [];
-    if (!roles) pending.push(Api.get("/contact-roles").then(function (data) { roles = data || []; }));
-    if (!me) pending.push(Api.get("/me").then(function (data) { me = data || {}; }));
-    await Promise.all(pending);
-  }
-
-  // "Tilføj borger" / "Tilføj virksomhed": role, search, add; or enter by hand.
-  async function openAddContact(kind) {
-    try {
-      await ensureContactData();
-    } catch (error) {
-      reportError(error);
-      return;
-    }
-    var isCitizen = kind === "citizen";
-    var noun = isCitizen ? "borger" : "virksomhed";
-
-    openDialog(isCitizen ? "Tilføj borger" : "Tilføj virksomhed", function (box, close) {
-      var role = document.createElement("select");
-      role.add(new Option("Vælg rolle...", ""));
-      roles.forEach(function (r) { role.add(new Option(r.name, String(r.id))); });
-      field(box, "Rolle *", role);
-
-      if (me.registerSearch === false) {
-        box.appendChild(element("div", "hint", "Søger kun i " + (isCitizen ? "borgere" : "virksomheder") +
-          ", der allerede er på sager."));
-      }
-
-      var form = element("div");
-      var search = {};
-      var grid;
-      if (isCitizen) {
-        search.cpr = field(form, "CPR-nummer", input(), "Eller søg på navn og adresse:");
-        grid = element("div", "grid");
-        [["firstname", "Fornavn"], ["lastname", "Efternavn"], ["streetname", "Vejnavn"],
-          ["housenumber", "Husnummer"], ["zipcode", "Postnummer"], ["zipdistrict", "By"]].forEach(function (f) {
-          search[f[0]] = field(grid, f[1], input());
-        });
-        form.appendChild(grid);
-      } else {
-        grid = element("div", "grid");
-        search.cvr = field(grid, "CVR-nummer", input());
-        search.name = field(grid, "Navn", input());
-        form.appendChild(grid);
-        var pLabel = element("label", "inline");
-        var pBox = input("checkbox");
-        pLabel.appendChild(pBox);
-        pLabel.appendChild(document.createTextNode("Vis virksomhedens produktionsenheder (P-numre)"));
-        form.appendChild(pLabel);
-      }
-      box.appendChild(form);
-
-      var error = element("div", "error");
-      var results = element("ul", "results");
-      results.hidden = true;
-      box.appendChild(error);
-      box.appendChild(results);
-
-      var buttons = element("div", "buttons");
-      var manual = button("Opret manuelt", "button", function () {
-        close();
-        openManualContact(kind, role.value);
-      });
-      var searchButton = button("Søg", "button primary", runSearch);
-      buttons.appendChild(manual);
-      buttons.appendChild(button("Annuller", "button", close));
-      buttons.appendChild(searchButton);
-      box.appendChild(buttons);
-
-      form.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          runSearch();
-        }
-      });
-
-      function params() {
-        var result = {};
-        Object.keys(search).forEach(function (key) {
-          var value = search[key].value.trim();
-          if (value) result[key] = value;
-        });
-        // CPR alone, or the name and address fields.
-        if (isCitizen && result.cpr) return { cpr: result.cpr };
-        if (!isCitizen && result.cvr) {
-          return pBox.checked ? { cvr: result.cvr, pnumbers: 1 } : { cvr: result.cvr };
-        }
-        if (!isCitizen) delete result.cvr;
-        return result;
-      }
-
-      async function runSearch() {
-        error.textContent = "";
-        if (!role.value) {
-          error.textContent = "Vælg en rolle.";
-          role.focus();
-          return;
-        }
-        var query = params();
-        if (!Object.keys(query).length) {
-          error.textContent = "Udfyld mindst ét søgefelt.";
-          return;
-        }
-        if (!isCitizen && query.pnumbers && !query.cvr) {
-          error.textContent = "Produktionsenheder kræver et CVR-nummer.";
-          return;
-        }
-        searchButton.disabled = true;
-        results.hidden = false;
-        results.replaceChildren(element("li", "none", "Søger..."));
-        try {
-          var data = await Api.get(isCitizen ? "/citizens/search" : "/companies/search", query);
-          var found = (data && data.results) || [];
-          if (found.length === 1) {
-            // As OpenCase: a single hit is added straight away.
-            results.replaceChildren(element("li", "none", "Tilføjer " + found[0].name + "..."));
-            await addContact(found[0]);
-            return;
-          }
-          renderResults(found, data && data.source);
-        } catch (err) {
-          results.hidden = true;
-          if (err instanceof Api.NotLoggedInError) {
-            close();
-            showLogin(err.message);
-          } else {
-            error.textContent = err.status === 400 ? "Udfyld mindst ét søgefelt." : err.message;
-          }
-        } finally {
-          searchButton.disabled = false;
-        }
-      }
-
-      function renderResults(found, source) {
-        results.replaceChildren();
-        if (!found.length) {
-          results.appendChild(element("li", "none", "Ingen " + (isCitizen ? "borgere" : "virksomheder") +
-            " fundet" + (source === "local" ? " på sager" : "") + ". Du kan oprette kontakten manuelt."));
-          return;
-        }
-        found.forEach(function (hit) {
-          var li = element("li", "item");
-          var body = element("div", "body");
-          body.appendChild(element("div", "name", hit.name));
-          var numbers = isCitizen
-            ? (hit.cprCvr ? "CPR " + maskCpr(hit.cprCvr) : "")
-            : [hit.cprCvr ? "CVR " + hit.cprCvr : "", hit.pnumber ? "P-nr. " + hit.pnumber : ""].filter(Boolean).join(" · ");
-          if (numbers) body.appendChild(element("div", "sub", numbers));
-          body.appendChild(element("div", "sub", hit.addressProtected
-            ? "Beskyttet adresse" : (hit.address ? formatAddress(hit.address) : "")));
-          li.appendChild(body);
-          li.appendChild(button("Tilføj", "button small", function () { addContact(hit); }));
-          results.appendChild(li);
-        });
-      }
-
-      // The server looks the number up again and stores what it finds.
-      async function addContact(hit) {
-        var body = { roleId: Number(role.value), cprCvr: hit.cprCvr };
-        if (hit.pnumber) body.pnumber = hit.pnumber;
-        try {
-          var contact = await Api.post(docPath("/contacts"), { json: body });
-          contacts.push(contact);
-          renderContacts();
-          close();
-          showStatus(contact.name + " er tilføjet som " + (contact.role ? contact.role.name.toLowerCase() : "kontakt") + ".");
-        } catch (err) {
-          results.hidden = true;
-          if (err.status === 409 && !isFinal()) {
-            error.textContent = "Denne " + noun + " er allerede tilføjet med den valgte rolle";
-          } else if (err.status === 404) {
-            error.textContent = (isCitizen ? "Borgeren" : "Virksomheden") + " blev ikke fundet.";
-          } else {
-            error.textContent = errorText(err);
-          }
-        }
-      }
-    });
-  }
-
-  // A contact the registers don't know: entered by hand.
-  function openManualContact(kind, roleId) {
-    var isCitizen = kind === "citizen";
-    openDialog(isCitizen ? "Opret borger manuelt" : "Opret virksomhed manuelt", function (box, close) {
-      var role = document.createElement("select");
-      role.add(new Option("Vælg rolle...", ""));
-      roles.forEach(function (r) { role.add(new Option(r.name, String(r.id))); });
-      role.value = roleId || "";
-      field(box, "Rolle *", role);
-
-      var values = {};
-      values.name = field(box, "Navn *", input());
-      var grid = element("div", "grid");
-      values.cprCvr = field(grid, isCitizen ? "CPR-nummer" : "CVR-nummer", input());
-      if (!isCitizen) values.pnumber = field(grid, "P-nummer", input());
-      [["streetname", "Vejnavn"], ["housenumber", "Husnummer"], ["floor", "Etage"], ["door", "Dør"],
-        ["zipcode", "Postnummer"], ["zipdistrict", "By"]].forEach(function (f) {
-        values[f[0]] = field(grid, f[1], input());
-      });
-      values.phone = field(grid, "Telefon", input("tel"));
-      values.email = field(grid, "E-mail", input("email"));
-      box.appendChild(grid);
-
-      var protectedLabel = element("label", "inline");
-      var protectedBox = input("checkbox");
-      protectedLabel.appendChild(protectedBox);
-      protectedLabel.appendChild(document.createTextNode("Beskyttet adresse"));
-      box.appendChild(protectedLabel);
-
-      var error = element("div", "error");
-      box.appendChild(error);
-
-      var buttons = element("div", "buttons");
-      var save = button("Tilføj", "button primary", async function () {
-        error.textContent = "";
-        if (!role.value) {
-          error.textContent = "Vælg en rolle.";
-          return;
-        }
-        var body = { roleId: Number(role.value), addressProtected: protectedBox.checked };
-        Object.keys(values).forEach(function (key) {
-          var value = values[key].value.trim();
-          if (value) body[key] = value;
-        });
-        if (!body.name) {
-          error.textContent = "Skriv et navn.";
-          values.name.focus();
-          return;
-        }
-        save.disabled = true;
-        try {
-          var contact = await Api.post(docPath("/contacts"), { json: body });
-          contacts.push(contact);
-          renderContacts();
-          close();
-          showStatus(contact.name + " er tilføjet.");
-        } catch (err) {
-          save.disabled = false;
-          error.textContent = err.status === 409 && !isFinal()
-            ? "Denne " + (isCitizen ? "borger" : "virksomhed") + " er allerede tilføjet med den valgte rolle"
-            : errorText(err);
-        }
-      });
-      buttons.appendChild(button("Annuller", "button", close));
-      buttons.appendChild(save);
-      box.appendChild(buttons);
-    });
   }
 
   // --- Notes -----------------------------------------------------------------------
@@ -863,7 +481,7 @@
 
   // Counts on the tabs, e.g. "Noter (2)".
   function updateTabLabels() {
-    var counts = { files: (doc.files || []).length, contacts: contacts.length, notes: notes.length };
+    var counts = { files: (doc.files || []).length, contacts: contacts ? contacts.count() : 0, notes: notes.length };
     TABS.forEach(function (tab) {
       var b = document.getElementById("tab-" + tab.id);
       if (b) b.textContent = tab.label + (counts[tab.id] ? " (" + counts[tab.id] + ")" : "");
@@ -926,14 +544,14 @@
       ? element("div", "locked-note", "Dokumentet er endeligt. Skift status for at ændre afsendere, modtagere og noter.")
       : null;
 
-    panels.contacts.appendChild(sectionHead("Afsendere og modtagere", canChangeContent() ? [
-      button("Tilføj borger", "button small", function () { openAddContact("citizen"); }),
-      button("Tilføj virksomhed", "button small", function () { openAddContact("company"); })
-    ] : []));
-    if (finalNote) panels.contacts.appendChild(finalNote);
+    // Re-created on each render; keeps the contacts already loaded.
+    var loaded = contacts ? contacts.list() : [];
     contactsBox = element("div");
+    contacts = createContacts(contactsBox);
+    panels.contacts.appendChild(sectionHead("Afsendere og modtagere", canChangeContent() ? contacts.addButtons() : []));
+    if (finalNote) panels.contacts.appendChild(finalNote);
     panels.contacts.appendChild(contactsBox);
-    renderContacts();
+    contacts.set(loaded);
 
     panels.notes.appendChild(sectionHead("Noter", canChangeContent() ? [
       button("Ny note", "button small", function () { openNoteEditor(null); })

@@ -8,6 +8,8 @@
     <script src="scripts/settings.js"></script>
     <script src="scripts/auth.js"></script>
     <script src="scripts/api.js"></script>
+    <link rel="stylesheet" href="resources/styles/panel.css">
+    <link rel="stylesheet" href="resources/styles/document-form.css">
 
     <style>
         html,
@@ -283,25 +285,8 @@
                 <input type="radio" name="target" value="new">
                 <span>Nyt dokument på en sag</span>
             </label>
-            <div class="sub-form" id="new-form" hidden>
-                <div class="field">
-                    <label class="required" for="case-search">Sag</label>
-                    <input id="case-search" type="search" autocomplete="off" placeholder="Søg på sagsnummer eller titel">
-                    <ul class="pick-list" id="cases" role="listbox" aria-label="Sager" hidden></ul>
-                </div>
-                <div class="row">
-                    <div class="field">
-                        <label class="required" for="doc-title">Dokumenttitel</label>
-                        <input id="doc-title" type="text" autocomplete="off">
-                    </div>
-                    <div class="field">
-                        <label class="required" for="category">Dokumentkategori</label>
-                        <select id="category">
-                            <option value="">Vælg...</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
+            <!-- Filled by scripts/document-form.js: the Info and Afsendere/modtagere tabs. -->
+            <div class="sub-form" id="new-form" hidden></div>
             <div class="hint" id="target-hint"></div>
         </fieldset>
 
@@ -328,6 +313,9 @@
         <div id="status" aria-live="polite"></div>
     </div>
 
+    <script src="scripts/panel.js"></script>
+    <script src="scripts/contacts.js"></script>
+    <script src="scripts/document-form.js"></script>
     <script src="scripts/fromtemplate-window.js"></script>
 </body>
 </html>
