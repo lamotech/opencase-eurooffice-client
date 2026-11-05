@@ -220,7 +220,8 @@
         window.Asc.plugin.attachEvent(
             "onDesktopApiTest",
             function (data) {
-                showStatus(JSON.stringify(data, null, 2));
+                if (data && data.commandExecuted === false) showStatus("FEJL: " + data.error);
+                else showStatus("");
             }
         );
 

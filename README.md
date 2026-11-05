@@ -59,7 +59,7 @@ The plugin logs in with [Nextcloud Login Flow v2](https://docs.nextcloud.com/ser
 2. The login URL is opened in the browser. The user logs in there and clicks **Grant access**.
 3. The plugin polls `poll.endpoint` until it receives an app password. The app password is stored in `localStorage`, per server URL.
 4. Every API call sends `Authorization: Basic base64(loginName:appPassword)`.
-5. **Log ud** deletes the stored app password and calls `POST …/logout`.
+5. **Log ud** deletes the stored app password, calls `POST …/logout`, and in the desktop app sends `portal:logout` (the same as Log ud on the start page). Files open in the desktop app's own browser, which has its own Nextcloud session cookies, so without this the next user's files would open as the previous user. It also closes the server's open documents.
 
 The plugin runs from a local file, so its requests come from origin `null`. Every endpoint therefore has to send CORS headers.
 
@@ -104,11 +104,11 @@ All endpoints are under `/index.php/apps/opencase/desktop/v1/api`.
 | `GET /documents/{id}/email/recipients` | Basic | `q` (2+ characters) | recipients to pick, sent back as they are |
 | `POST /documents/{id}/email/access` | Basic | JSON `{ emails }` | `[{ email, documentAccess }]` for typed addresses |
 | `POST /documents/{id}/email/link`, `POST /documents/{id}/email/pdf` | Basic | JSON `{ to, cc, bcc, subject, bodyHtml, saveAsDocument }` (+ `fileIds` for PDF) | `{ sent, attachments }`. `400`, `412` no Mail account, `422` conversion failed, `502` mail server refused |
-| `GET /phrases` | Basic | `search`, `status`, `orgUuids`, `templateFormat` | phrases sorted by category path and title. Used by **Åbn frase**, **Frase info** and **Indsæt frase** (and by **Ny skabelon**) |
+| `GET /phrases` | Basic | `search`, `status`, `documentId` or `caseId`, `orgUuids`, `templateFormat` | phrases sorted by category path and title. Used by **Åbn frase**, **Frase info** and **Indsæt frase** (and by **Ny skabelon**). **Indsæt frase** is shown to template managers, and to other users in a document from OpenCase with `canWrite`. It sends the open document's `documentId` here and to `/content` and `/file` |
 | `GET /phrases/{id}`, `PUT /phrases/{id}` | Basic | JSON with any of `title`, `description`, `content`, `categoryId`, `status`, `scopes` | the phrase with `content`, `scopes`, `templates`. Used by **Frase info** |
 | `POST /phrases` | Basic | JSON (`blankFile: true` for a file to write in the editor, or `content`), or multipart with `file` | `201` with the phrase; `fileError` if only the file failed. Used by **Ny frase** |
 | `POST /phrases/{id}/file` | Basic | multipart `file`, or JSON `{ blank: true }` | the phrase, with `editorUrl` |
-| `GET /phrases/{id}/content` | Basic | none | `{ source, html, text, fileUrl }`. Used by **Indsæt frase** |
+| `GET /phrases/{id}/content` | Basic | `documentId` or `caseId` | `{ source, html, text, fileUrl }`. Used by **Indsæt frase** |
 | `GET /phrase-categories`, `GET /case-types` | Basic | none | categories in tree order with `depth`; case types `[{ id, name }]` |
 | `GET /templates/{id}/phrases` | Basic | `documentId` or `caseId` | `[{ phraseId, title, description, categoryPath, isRequired, isDefault }]` in the template's order. Used by **Ny fil fra skabelon** |
 | `POST /documents/{id}/files/from-template` | Basic | JSON `{ templateId, filename, phraseIds }` | `201 { fileId, name, editorUrl, document }`. `400`/`404` with `error`, `500` when the merge fails |

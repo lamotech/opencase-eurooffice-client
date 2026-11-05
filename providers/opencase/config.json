@@ -6,6 +6,10 @@
     },
     "editorPage": "/apps/eurooffice/",
     "startPage": "/apps/opencase/",
+    "extraLogout": [
+        "https://n2adgangsstyring.eksterntest-stoettesystemerne.dk",
+        "https://test-idp.kombit.dk"
+    ],
     "order": 1,
     "icons": {
         "themeLight": {

@@ -54,6 +54,7 @@
   var access = null;
   var canManageTemplates = false;
   var canSendDigitalPost = false;
+  var openDocumentWritable = false; // GET /files/{id}/document canWrite
   var ACCESS_BUTTON_ID = "opencase_access";
   var noAccessWindow = null;
 
@@ -204,7 +205,7 @@
         enableToggle: false,
         separator: false
       }
-    ].concat(supportsMergeFields() ? [getMergeFieldsButton()] : [], getPhraseButtons()) : []);
+    ].concat(supportsMergeFields() ? [getMergeFieldsButton()] : [], getPhraseButtons()) : getInsertPhraseButton());
   }
 
   // Logged in without access, or OpenCase didn't answer: say so, and check
@@ -445,12 +446,18 @@
       if (isLocalDesktopFile()) return null;
       var openFileId = getOpenFileId();
       if (!openFileId) return null;
+      var doc = null;
       try {
-          return await mainGet("/files/" + encodeURIComponent(openFileId) + "/document");
+          doc = await mainGet("/files/" + encodeURIComponent(openFileId) + "/document");
       } catch (error) {
           console.error("OpenCase open document:", error);
-          return null;
       }
+      var writable = !!(doc && doc.canWrite);
+      if (writable !== openDocumentWritable) {
+          openDocumentWritable = writable;
+          updateToolbar();
+      }
+      return doc;
   }
 
   // Sending works on the open document, so the buttons are only shown for
@@ -577,6 +584,7 @@
       canManageTemplates = false;
       canSendDigitalPost = false;
       digitalPostEnabled = null;
+      openDocumentWritable = false;
       mergeFields = null;
   }
 
@@ -705,12 +713,30 @@
     if (loginInProgress) return;
     if (window.OpenCaseAuth.isLoggedIn()) {
       resetUserInfo();
-      window.OpenCaseAuth.logout().then(updateToolbar);
+      window.OpenCaseAuth.logout().then(function () {
+        updateToolbar();
+        endDesktopSession();
+      });
       return;
     }
     login().catch(function (error) {
       console.error("OpenCase login:", error);
     });
+  }
+
+  // The plugin's login is an app password, but files open in the desktop app's
+  // own browser, which has its own Nextcloud session (cookies) and doesn't know
+  // the plugin's login. Without this, the next user's files would open as the
+  // user who logged in there before. Same command as Log ud on the desktop
+  // app's start page: it deletes the server's cookies and closes its documents
+  // (asking to save first), so in a document from OpenCase it closes that too.
+  function endDesktopSession() {
+    var desktop = window.AscDesktopEditor || desktopEditor();
+    if (!desktop || typeof desktop.execCommand !== "function") return;
+    desktop.execCommand("portal:logout", JSON.stringify({
+      domain: window.OpenCaseSettings.getUrl().replace(/\/$/, ""),
+      extra: window.OpenCaseSettings.LOGIN_SERVICE_URLS
+    }));
   }
 
   function openOpenCase() {
@@ -906,23 +932,38 @@
       fromTemplateWindow = null;
   }
 
+  function phraseButton(b, separator) {
+      return {
+          id: b.id,
+          type: "big-button",
+          text: b.text,
+          hint: b.hint,
+          icons: "resources/icons/" + b.icon + ".svg",
+          // Inserting changes the open file; the others don't.
+          lockInViewMode: b.mode === "insert",
+          enableToggle: false,
+          separator: separator
+      };
+  }
+
   function getPhraseButtons() {
       // Text can't be inserted in the PDF editor.
       var editorType = window.Asc.plugin.info.editorType;
       return PHRASE_BUTTONS.filter(function (b) {
           return b.mode !== "insert" || editorType !== "pdf";
       }).map(function (b) {
-          return {
-              id: b.id,
-              type: "big-button",
-              text: b.text,
-              hint: b.hint,
-              icons: "resources/icons/" + b.icon + ".svg",
-              // Inserting changes the open file; the others don't.
-              lockInViewMode: b.mode === "insert",
-              enableToggle: false,
-              separator: false
-          };
+          return phraseButton(b, false);
+      });
+  }
+
+  // Users who can't manage templates only get Indsæt frase, on its own at the
+  // end of the ribbon: in a document from OpenCase they may change.
+  function getInsertPhraseButton() {
+      if (!openDocumentWritable || window.Asc.plugin.info.editorType === "pdf") return [];
+      return PHRASE_BUTTONS.filter(function (b) {
+          return b.mode === "insert";
+      }).map(function (b) {
+          return phraseButton(b, true);
       });
   }
 

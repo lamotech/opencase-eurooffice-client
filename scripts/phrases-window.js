@@ -37,6 +37,7 @@
   var mode = "open";
   var openFileId = null;
   var lists = null; // { categories, caseTypes, organisations }, loaded for the form
+  var insertContext = {}; // Indsæt frase: { documentId } of the open document
 
   // --- Helpers --------------------------------------------------------------------
 
@@ -146,7 +147,8 @@
 
   // --- The phrase list (Åbn frase, Frase info, Indsæt frase) ---------------------------
 
-  // onPick(phrase, item) is called when a phrase is clicked.
+  // onPick(phrase, item) is called when a phrase is clicked. options.params are
+  // extra query parameters for GET /phrases.
   function showList(options) {
     content.replaceChildren();
     setActions([]);
@@ -178,10 +180,10 @@
       var id = ++loadId;
       list.replaceChildren(element("div", "none", "Henter fraser..."));
       try {
-        var phrases = await Api.get("/phrases", {
+        var phrases = await Api.get("/phrases", Object.assign({
           search: search.value.trim(),
           status: archived.checked ? "draft,active,archived" : options.status
-        });
+        }, options.params));
         if (id !== loadId) return;
         render(phrases || []);
         showStatus("");
@@ -290,16 +292,41 @@
 
   // --- Indsæt frase ------------------------------------------------------------------
 
-  function showInsert() {
+  // The phrases that fit the open document's case. Users who aren't template
+  // managers only reach phrases with scopes through a case, so every request
+  // for Indsæt frase carries the document. A local file, or a template or
+  // phrase file (404: not a document), has none.
+  async function loadInsertContext() {
+    if (!openFileId) return {};
+    try {
+      var doc = await Api.get("/files/" + encodeURIComponent(openFileId) + "/document");
+      return { documentId: doc.id };
+    } catch (error) {
+      if (error.status === 404) return {};
+      throw error;
+    }
+  }
+
+  async function showInsert() {
     setHeading("Indsæt frase");
+    content.replaceChildren();
+    setActions([]);
+    showStatus("Henter...");
+    try {
+      insertContext = await loadInsertContext();
+    } catch (error) {
+      reportError(error);
+      return;
+    }
     showList({
       status: "draft,active",
       allowArchived: false,
+      params: insertContext,
       onPick: async function (phrase, item, below) {
         below.replaceChildren(element("div", "none", "Henter frasens tekst..."));
         setActions([]);
         try {
-          var text = await Api.get("/phrases/" + encodeURIComponent(phrase.id) + "/content");
+          var text = await Api.get("/phrases/" + encodeURIComponent(phrase.id) + "/content", insertContext);
           await addFileFormatting(text, below);
           renderPreview(text, below);
         } catch (error) {
@@ -324,7 +351,7 @@
     }
     box.replaceChildren(element("div", "none", "Henter frasens fil..."));
     try {
-      var blob = await Api.getBlob(filePath(phrase));
+      var blob = await Api.getBlob(filePath(phrase), insertContext);
       phrase.fileBytes = await blob.arrayBuffer();
       if (phrase.fileFormat !== "docx" || !window.mammoth) return; // mammoth reads .docx only
       var result = await window.mammoth.convertToHtml({ arrayBuffer: phrase.fileBytes.slice(0) });
@@ -337,9 +364,9 @@
   }
 
   // fileUrl points into the desktop API; request it through api.js, which
-  // adds the login.
+  // adds the login and the query parameters.
   function filePath(phrase) {
-    var match = /\/desktop\/v1\/api(\/.+)$/.exec(phrase.fileUrl || "");
+    var match = /\/desktop\/v1\/api(\/[^?#]+)/.exec(phrase.fileUrl || "");
     return match ? match[1] : "/phrases/" + encodeURIComponent(phrase.id) + "/file";
   }
 

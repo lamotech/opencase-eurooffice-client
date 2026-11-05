@@ -97,8 +97,8 @@
   }
 
   // A file, e.g. a PDF. A plain link can't be used: it would need the login.
-  function getBlob(path) {
-    return request("GET", path, { blob: true });
+  function getBlob(path, params) {
+    return request("GET", path, { blob: true, params: params });
   }
 
   function put(path, options) {

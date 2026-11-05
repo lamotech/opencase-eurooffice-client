@@ -4,6 +4,13 @@
 (function (window) {
   var DEFAULT_URL = "https://dev04.opencase.dk/";
   var STORAGE_KEY = "opencase-plugin-url";
+  // Login services whose session must end with Log ud in the desktop app, or
+  // they sign the next user in as the previous one without asking. Also in
+  // extraLogout in providers/opencase/config.json. KOMBIT's test environment.
+  var LOGIN_SERVICE_URLS = [
+    "https://n2adgangsstyring.eksterntest-stoettesystemerne.dk",
+    "https://test-idp.kombit.dk"
+  ];
 
   function isValidUrl(value) {
     try {
@@ -31,6 +38,7 @@
 
   window.OpenCaseSettings = {
     DEFAULT_URL: DEFAULT_URL,
+    LOGIN_SERVICE_URLS: LOGIN_SERVICE_URLS,
     isValidUrl: isValidUrl,
     getUrl: getUrl,
     setUrl: setUrl
